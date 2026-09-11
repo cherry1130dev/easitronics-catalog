@@ -12,6 +12,15 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/uplode',
+        destination: '/upload',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
