@@ -1,0 +1,127 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { Project } from '@/lib/types';
+import { IndianRupee, ArrowRight, Copy, Check, Sparkles } from 'lucide-react';
+import { formatProjectDetailsForCopy } from '@/lib/copyUtils';
+
+interface ProjectListRowProps {
+  project: Project;
+  index: number;
+}
+
+export default function ProjectListRow({ project, index }: ProjectListRowProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigator.clipboard.writeText(formatProjectDetailsForCopy(project));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  return (
+    <div className="group flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition-all">
+      {/* Left: Index, Title & Details */}
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+          <span className="text-xs font-mono text-slate-500 font-bold">
+            #{String(index + 1).padStart(2, '0')}
+          </span>
+
+          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
+            {project.branch}
+          </span>
+
+          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-950 text-slate-300 border border-slate-800">
+            {project.domain}
+          </span>
+
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+              project.type === 'Product'
+                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                : 'bg-blue-950/80 text-blue-300 border border-blue-800/60'
+            }`}
+          >
+            {project.type}
+          </span>
+
+          {project.featured && (
+            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950">
+              <Sparkles className="w-3 h-3 fill-current" />
+              Featured
+            </span>
+          )}
+        </div>
+
+        <Link href={`/projects/${project.id}`}>
+          <h4 className="text-base font-bold text-white group-hover:text-amber-400 transition-colors leading-snug">
+            {project.title}
+          </h4>
+        </Link>
+
+        <p className="text-xs text-slate-400 mt-1 line-clamp-1">
+          {project.description}
+        </p>
+
+        {project.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {project.tags.slice(0, 4).map((tag, i) => (
+              <span key={i} className="text-[10px] bg-slate-950 text-slate-400 px-1.5 py-0.5 rounded border border-slate-800">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Right: Price & Buttons */}
+      <div className="flex items-center justify-between md:justify-end gap-4 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
+        <div className="text-left md:text-right">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-semibold">Estimated Price</span>
+          <span className="text-base font-extrabold text-amber-300 flex items-center md:justify-end">
+            <IndianRupee className="w-3.5 h-3.5 inline" />
+            {project.price.toLocaleString('en-IN')}
+          </span>
+          <span className="text-[9px] text-amber-400/90 font-medium block">
+            *Estimation only (Not fixed)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopy}
+            title="Copy project specifications and quotation details"
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              copied
+                ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700'
+            }`}
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[10px] font-bold">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-[10px]">Copy</span>
+              </>
+            )}
+          </button>
+
+          <Link
+            href={`/projects/${project.id}`}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-400 hover:bg-amber-500 text-slate-950 transition-colors"
+          >
+            <span>Details</span>
+            <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
