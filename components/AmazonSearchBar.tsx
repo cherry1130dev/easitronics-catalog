@@ -73,50 +73,51 @@ export default function AmazonSearchBar({
       className="w-full max-w-4xl mx-auto shadow-lg rounded-xl overflow-hidden border border-slate-700 bg-slate-900 focus-within:ring-2 focus-within:ring-amber-400 focus-within:border-amber-400 transition-all"
     >
       <div className="flex items-stretch h-12 sm:h-14">
-        {/* Amazon-style Scope/Category dropdown */}
-        <div className="relative flex items-center bg-slate-800/90 border-r border-slate-700 hover:bg-slate-750 transition-colors">
+        {/* Amazon-style Scope/Category dropdown - Compact on mobile */}
+        <div className="relative flex items-center bg-slate-800/90 border-r border-slate-700 hover:bg-slate-750 transition-colors shrink-0 max-w-[95px] sm:max-w-none">
           <select
             value={selectedScope}
             onChange={handleScopeChange}
             aria-label="Search department or scope"
-            className="appearance-none bg-transparent text-slate-200 text-xs sm:text-sm font-semibold pl-3 sm:pl-4 pr-7 sm:pr-8 py-2 h-full cursor-pointer outline-none z-10"
+            className="appearance-none bg-transparent text-slate-200 text-xs sm:text-sm font-semibold pl-2 sm:pl-4 pr-6 sm:pr-8 py-2 h-full cursor-pointer outline-none z-10 truncate"
           >
             <option value="All" className="bg-slate-900 text-white">
-              All Categories
+              All
             </option>
             <optgroup label="Engineering Branch" className="bg-slate-900 text-slate-300 font-bold">
               {branches.map((b) => (
                 <option key={b} value={`branch:${b}`} className="bg-slate-900 text-white font-normal">
-                  Branch: {b}
+                  {b}
                 </option>
               ))}
             </optgroup>
             <optgroup label="Technology Domain" className="bg-slate-900 text-slate-300 font-bold">
               {domains.map((d) => (
                 <option key={d} value={`domain:${d}`} className="bg-slate-900 text-white font-normal">
-                  Domain: {d}
+                  {d}
                 </option>
               ))}
             </optgroup>
           </select>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 pointer-events-none" />
+          <ChevronDown className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400 absolute right-1.5 sm:right-2 pointer-events-none" />
         </div>
 
         {/* Search input field */}
-        <div className="relative flex-1 flex items-center bg-slate-900">
+        <div className="relative flex-1 flex items-center bg-slate-900 min-w-0">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={placeholder}
-            className="w-full h-full px-3 sm:px-4 text-sm sm:text-base text-white placeholder-slate-400 bg-transparent outline-none"
+            placeholder="Search project titles, keywords..."
+            className="w-full h-full px-3 sm:px-4 text-xs sm:text-base text-white placeholder-slate-400 bg-transparent outline-none truncate"
           />
           {searchTerm && (
             <button
               type="button"
               onClick={handleClear}
-              className="p-1.5 mr-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="w-8 h-8 mr-1 sm:mr-2 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
               title="Clear search"
+              aria-label="Clear search input"
             >
               <X className="w-4 h-4" />
             </button>
@@ -127,9 +128,9 @@ export default function AmazonSearchBar({
         <button
           type="submit"
           aria-label="Submit search"
-          className="bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 font-bold px-4 sm:px-6 flex items-center justify-center transition-colors shadow-inner"
+          className="bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 font-bold px-3.5 sm:px-6 min-w-[48px] flex items-center justify-center transition-colors shadow-inner shrink-0"
         >
-          <Search className="w-5 h-5" />
+          <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           <span className="sr-only">Search</span>
         </button>
       </div>

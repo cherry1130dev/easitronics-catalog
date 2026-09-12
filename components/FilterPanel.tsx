@@ -40,6 +40,17 @@ export default function FilterPanel({
     filters.maxPrice < 100000 ? String(filters.maxPrice) : ''
   );
 
+  const [openSections, setOpenSections] = useState({
+    branch: true,
+    price: true,
+    domain: true,
+    type: true,
+  });
+
+  const toggleSection = (section: keyof typeof openSections) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
   // Toggle single branch
   const toggleBranch = (branch: string) => {
     const isSelected = filters.branches.includes(branch);
@@ -93,7 +104,7 @@ export default function FilterPanel({
     Boolean(filters.searchScope && filters.searchScope !== 'All');
 
   return (
-    <aside className="w-full bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm text-slate-200">
+    <aside className="w-full bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm text-slate-200">
       {/* Header */}
       <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
         <div className="flex items-center gap-2">
@@ -103,176 +114,227 @@ export default function FilterPanel({
         {hasActiveFilters && (
           <button
             onClick={onReset}
-            className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium"
+            className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium active:scale-95"
           >
             <RotateCcw className="w-3 h-3" />
-            Reset
+            Reset All
           </button>
         )}
       </div>
 
-      {/* 1. Branch Filter (Required by user) */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2.5">
-          <label className="text-xs font-bold text-white uppercase tracking-wider">
-            Branch
-          </label>
-          {filters.branches.length > 0 && (
-            <span className="text-[10px] font-semibold text-amber-400">
-              {filters.branches.length} selected
+      {/* 1. Branch Filter (Collapsible) */}
+      <div className="mb-4 pb-4 border-b border-slate-800/80">
+        <button
+          type="button"
+          onClick={() => toggleSection('branch')}
+          className="w-full flex items-center justify-between py-1 text-left group"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+              Branch
             </span>
-          )}
-        </div>
-        <div className="space-y-1.5">
-          {ALL_BRANCHES.map((branch) => {
-            const isSelected = filters.branches.includes(branch);
-            const count = branchCounts[branch] ?? 0;
-            return (
-              <button
-                key={branch}
-                onClick={() => toggleBranch(branch)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  isSelected
-                    ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-4 h-4 rounded flex items-center justify-center border ${
-                      isSelected
-                        ? 'border-slate-950 bg-slate-950 text-amber-400'
-                        : 'border-slate-700 bg-slate-800'
-                    }`}
-                  >
-                    {isSelected && <Check className="w-3 h-3" />}
-                  </div>
-                  <span>{branch}</span>
-                </div>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded ${
-                    isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2. Cost / Price Filter (Required by user) */}
-      <div className="mb-6 pb-6 border-b border-slate-800">
-        <label className="block text-xs font-bold text-white uppercase tracking-wider mb-1">
-          Estimated Budget
-        </label>
-        <p className="text-[10px] text-amber-400/90 font-medium mb-2.5">
-          *Costs are estimation only, not fixed.
-        </p>
-        <div className="space-y-1 mb-3">
-          {PRICE_BRACKETS.map((bracket) => {
-            const isSelected = filters.priceBracket === bracket.id;
-            return (
-              <button
-                key={bracket.id}
-                onClick={() => handleSelectBracket(bracket.id, bracket.min, bracket.max)}
-                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-all flex items-center justify-between ${
-                  isSelected
-                    ? 'bg-amber-400 text-slate-950 font-bold'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <span>{bracket.label}</span>
-                {isSelected && <Check className="w-3 h-3 text-slate-950" />}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Custom Price Range input form */}
-        <form onSubmit={handleApplyCustomPrice} className="pt-2 border-t border-slate-800/80">
-          <span className="text-[11px] text-slate-400 block mb-1.5">Custom Range (₹)</span>
-          <div className="flex items-center gap-2 mb-2">
-            <input
-              type="text"
-              placeholder="Min"
-              value={customMin}
-              onChange={(e) => setCustomMin(e.target.value)}
-              className="w-1/2 px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 outline-none focus:border-amber-400"
-            />
-            <span className="text-slate-500 text-xs">-</span>
-            <input
-              type="text"
-              placeholder="Max"
-              value={customMax}
-              onChange={(e) => setCustomMax(e.target.value)}
-              className="w-1/2 px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 outline-none focus:border-amber-400"
-            />
+            {filters.branches.length > 0 && (
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950">
+                {filters.branches.length}
+              </span>
+            )}
           </div>
-          <button
-            type="submit"
-            className="w-full py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
-          >
-            Apply Price
-          </button>
-        </form>
-      </div>
-
-      {/* 3. Domain Filter (Required by user) */}
-      <div className="mb-6 pb-6 border-b border-slate-800">
-        <div className="flex items-center justify-between mb-2.5">
-          <label className="text-xs font-bold text-white uppercase tracking-wider">
-            Domain
-          </label>
-          {filters.domains.length > 0 && (
-            <span className="text-[10px] font-semibold text-amber-400">
-              {filters.domains.length} selected
-            </span>
+          {openSections.branch ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
           )}
-        </div>
-        <div className="space-y-1.5">
-          {ALL_DOMAINS.map((domain) => {
-            const isSelected = filters.domains.includes(domain);
-            const count = domainCounts[domain] ?? 0;
-            return (
-              <button
-                key={domain}
-                onClick={() => toggleDomain(domain)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  isSelected
-                    ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-4 h-4 rounded flex items-center justify-center border ${
-                      isSelected
-                        ? 'border-slate-950 bg-slate-950 text-amber-400'
-                        : 'border-slate-700 bg-slate-800'
-                    }`}
-                  >
-                    {isSelected && <Check className="w-3 h-3" />}
-                  </div>
-                  <span>{domain}</span>
-                </div>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded ${
-                    isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
+        </button>
+
+        {openSections.branch && (
+          <div className="space-y-1.5 mt-2.5">
+            {ALL_BRANCHES.map((branch) => {
+              const isSelected = filters.branches.includes(branch);
+              const count = branchCounts[branch] ?? 0;
+              return (
+                <button
+                  key={branch}
+                  onClick={() => toggleBranch(branch)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
+                    isSelected
+                      ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  {count}
-                </span>
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
+                        isSelected
+                          ? 'border-slate-950 bg-slate-950 text-amber-400'
+                          : 'border-slate-700 bg-slate-800'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3" />}
+                    </div>
+                    <span>{branch}</span>
+                  </div>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded ${
+                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 2. Cost / Price Filter (Collapsible) */}
+      <div className="mb-4 pb-4 border-b border-slate-800/80">
+        <button
+          type="button"
+          onClick={() => toggleSection('price')}
+          className="w-full flex items-center justify-between py-1 text-left group"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+              Estimated Budget
+            </span>
+            {filters.priceBracket !== 'all' && (
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950">
+                Active
+              </span>
+            )}
+          </div>
+          {openSections.price ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </button>
+
+        {openSections.price && (
+          <div className="mt-2.5">
+            <p className="text-[10px] text-amber-400/90 font-medium mb-2">
+              *Costs are estimation only, not fixed.
+            </p>
+            <div className="space-y-1 mb-3">
+              {PRICE_BRACKETS.map((bracket) => {
+                const isSelected = filters.priceBracket === bracket.id;
+                return (
+                  <button
+                    key={bracket.id}
+                    onClick={() => handleSelectBracket(bracket.id, bracket.min, bracket.max)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between active:scale-[0.98] ${
+                      isSelected
+                        ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <span>{bracket.label}</span>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-slate-950 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Price Range input form */}
+            <form onSubmit={handleApplyCustomPrice} className="pt-2 border-t border-slate-800/80">
+              <span className="text-[11px] text-slate-400 block mb-1.5">Custom Range (₹)</span>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  placeholder="Min"
+                  value={customMin}
+                  onChange={(e) => setCustomMin(e.target.value)}
+                  className="w-1/2 px-2.5 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 outline-none focus:border-amber-400"
+                />
+                <span className="text-slate-500 text-xs">-</span>
+                <input
+                  type="text"
+                  placeholder="Max"
+                  value={customMax}
+                  onChange={(e) => setCustomMax(e.target.value)}
+                  className="w-1/2 px-2.5 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 outline-none focus:border-amber-400"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-slate-700 transition-colors active:scale-95"
+              >
+                Apply Custom Budget
               </button>
-            );
-          })}
-        </div>
+            </form>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Domain Filter (Collapsible) */}
+      <div className="mb-4 pb-4 border-b border-slate-800/80">
+        <button
+          type="button"
+          onClick={() => toggleSection('domain')}
+          className="w-full flex items-center justify-between py-1 text-left group"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+              Technology Domain
+            </span>
+            {filters.domains.length > 0 && (
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950">
+                {filters.domains.length}
+              </span>
+            )}
+          </div>
+          {openSections.domain ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </button>
+
+        {openSections.domain && (
+          <div className="space-y-1.5 mt-2.5">
+            {ALL_DOMAINS.map((domain) => {
+              const isSelected = filters.domains.includes(domain);
+              const count = domainCounts[domain] ?? 0;
+              return (
+                <button
+                  key={domain}
+                  onClick={() => toggleDomain(domain)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
+                    isSelected
+                      ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
+                        isSelected
+                          ? 'border-slate-950 bg-slate-950 text-amber-400'
+                          : 'border-slate-700 bg-slate-800'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3" />}
+                    </div>
+                    <span>{domain}</span>
+                  </div>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded ${
+                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 4. Project Type Filter */}
-      <div className="mb-2">
-        <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2.5">
+      <div>
+        <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2">
           Project Type
         </label>
         <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
@@ -280,9 +342,9 @@ export default function FilterPanel({
             <button
               key={type}
               onClick={() => onFilterChange({ ...filters, type })}
-              className={`py-1.5 rounded-md font-semibold transition-all ${
+              className={`py-2 rounded-md font-semibold transition-all active:scale-95 ${
                 filters.type === type
-                  ? 'bg-amber-400 text-slate-950 shadow-sm'
+                  ? 'bg-amber-400 text-slate-950 shadow-sm font-bold'
                   : 'text-slate-400 hover:text-white'
               }`}
             >

@@ -276,23 +276,23 @@ Support: [Charan (+91 7989604815)](https://wa.me/917989604815) | [Mouli (+91 773
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 text-slate-950 font-bold text-xs shadow-2xl hover:scale-105 active:scale-95 transition-all group"
+          className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 text-slate-950 font-bold text-xs shadow-2xl hover:scale-105 active:scale-95 transition-all group"
           title="Ask Easi - AI Project Advisor (Powered by Gemini AI)"
         >
           <div className="relative flex items-center justify-center">
-            <Sparkles className="w-5 h-5 fill-slate-950 animate-spin" style={{ animationDuration: '6s' }} />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-teal-600 animate-ping" />
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 fill-slate-950 animate-spin" style={{ animationDuration: '6s' }} />
+            <span className="absolute -top-1 -right-1 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-teal-600 animate-ping" />
           </div>
           <div className="text-left leading-tight">
-            <span className="font-black text-sm tracking-tight block text-slate-950">Ask Easi</span>
-            <span className="text-[10px] font-semibold text-slate-900 block opacity-85">Powered by Gemini AI</span>
+            <span className="font-black text-xs sm:text-sm tracking-tight block text-slate-950">Ask Easi</span>
+            <span className="text-[9px] sm:text-[10px] font-semibold text-slate-900 block opacity-85 hidden xs:inline">Gemini AI</span>
           </div>
         </button>
       )}
 
       {/* Floating Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[420px] h-[580px] max-h-[85vh] bg-slate-950 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-x-2 bottom-2 sm:inset-auto sm:bottom-6 sm:right-6 z-50 sm:w-[420px] h-[85vh] sm:h-[580px] max-h-[92vh] bg-slate-950 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           
           {/* Header */}
           <div className="p-3.5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-850 border-b border-slate-800 flex items-center justify-between">
