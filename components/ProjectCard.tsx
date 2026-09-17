@@ -85,6 +85,11 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
                 New
               </span>
             )}
+            {project.isEdited && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-800">
+                Updated
+              </span>
+            )}
           </div>
         </div>
 

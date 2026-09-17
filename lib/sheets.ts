@@ -8,6 +8,7 @@ export { GOOGLE_SHEET_CSV_URL, GOOGLE_SHEET_VIEW_URL };
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const CUSTOM_PROJECTS_FILE = path.join(DATA_DIR, 'custom-projects.json');
+const OVERRIDES_FILE = path.join(DATA_DIR, 'project-overrides.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const EXCEL_FILE_PATH = path.join(process.cwd(), 'project_catalog_data.xlsx');
 const CSV_FILE_PATH = path.join(process.cwd(), 'project_catalog_data.csv');
@@ -83,6 +84,37 @@ function cleanCitations(str: string): string {
 }
 
 /**
+ * Get saved project overrides (edits made to existing sheet/catalog titles)
+ */
+export function getProjectOverrides(): Record<string, Partial<Project>> {
+  try {
+    if (!fs.existsSync(OVERRIDES_FILE)) {
+      return {};
+    }
+    const raw = fs.readFileSync(OVERRIDES_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('Error reading project overrides file:', err);
+    return {};
+  }
+}
+
+/**
+ * Save project overrides locally
+ */
+export function saveProjectOverrides(overrides: Record<string, Partial<Project>>): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(OVERRIDES_FILE, JSON.stringify(overrides, null, 2), 'utf-8');
+    cachedResult = null;
+  } catch (err) {
+    console.error('Error saving project overrides file:', err);
+  }
+}
+
+/**
  * Get locally saved custom/uploaded projects
  */
 export function getCustomProjects(): Project[] {
@@ -123,7 +155,8 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
     return cachedResult;
   }
 
-  const customProjects = getCustomProjects();
+  const overrides = getProjectOverrides();
+  const rawCustomProjects = getCustomProjects();
   let sheetProjects: Project[] = [];
   let isFallback = false;
   let errorMessage: string | undefined;
@@ -191,8 +224,9 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
           ? demoVideoUrlRaw
           : undefined;
 
-      return {
-        id: `sheet-${idx + 1}`,
+      const id = `sheet-${idx + 1}`;
+      const baseProject: Project = {
+        id,
         title,
         domain: domain.trim(),
         branch: branch.trim(),
@@ -203,7 +237,22 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
         tags,
         featured,
         source: 'sheet',
+        orderIndex: idx + 1, // Higher index means added later in Excel sheet
       };
+
+      const override = overrides[id] || overrides[title];
+      if (override) {
+        return {
+          ...baseProject,
+          ...override,
+          id, // retain primary ID
+          source: 'sheet',
+          isEdited: true,
+          orderIndex: idx + 1,
+        };
+      }
+
+      return baseProject;
     });
   } catch (err: any) {
     console.error('Error fetching Google Sheet:', err.message || err);
@@ -216,27 +265,67 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
       if (fs.existsSync(fallbackPath)) {
         const localCsv = fs.readFileSync(fallbackPath, 'utf-8');
         const rows = parseCSV(localCsv);
-        sheetProjects = rows.slice(1).map((row, idx) => ({
-          id: `local-${idx + 1}`,
-          title: cleanCitations(row[0]) || `Project #${idx + 1}`,
-          domain: (row[1] || 'IoT').trim(),
-          branch: (row[2] || 'ECE').trim(),
-          type: (row[3]?.toLowerCase() === 'product' ? 'Product' : 'Prototype') as ProjectKind,
-          price: parseInt(String(row[4]).replace(/[^0-9]/g, ''), 10) || 10000,
-          description: cleanCitations(row[5]) || '',
-          demoVideoUrl: row[7] && !row[7].includes('ADD_VIDEO_LINK') ? row[7] : undefined,
-          tags: row[8] ? row[8].split(',').map((t) => t.trim()).filter(Boolean) : [],
-          featured: String(row[9]).toUpperCase() === 'TRUE',
-          source: 'sheet',
-        }));
+        sheetProjects = rows.slice(1).map((row, idx) => {
+          const id = `local-${idx + 1}`;
+          const title = cleanCitations(row[0]) || `Project #${idx + 1}`;
+          const baseProject: Project = {
+            id,
+            title,
+            domain: (row[1] || 'IoT').trim(),
+            branch: (row[2] || 'ECE').trim(),
+            type: (row[3]?.toLowerCase() === 'product' ? 'Product' : 'Prototype') as ProjectKind,
+            price: parseInt(String(row[4]).replace(/[^0-9]/g, ''), 10) || 10000,
+            description: cleanCitations(row[5]) || '',
+            demoVideoUrl: row[7] && !row[7].includes('ADD_VIDEO_LINK') ? row[7] : undefined,
+            tags: row[8] ? row[8].split(',').map((t) => t.trim()).filter(Boolean) : [],
+            featured: String(row[9]).toUpperCase() === 'TRUE',
+            source: 'sheet',
+            orderIndex: idx + 1,
+          };
+
+          const override = overrides[id] || overrides[title];
+          if (override) {
+            return {
+              ...baseProject,
+              ...override,
+              id,
+              source: 'sheet',
+              isEdited: true,
+              orderIndex: idx + 1,
+            };
+          }
+
+          return baseProject;
+        });
       }
     } catch (fallbackErr) {
       console.error('Failed to load fallback CSV:', fallbackErr);
     }
   }
 
-  // Combine Google Sheet projects with locally uploaded/added projects
-  const allProjects = [...customProjects, ...sheetProjects];
+  // Deduplicate: If a custom project has the same title as a sheet project, avoid duplicate entries.
+  const sheetTitleMap = new Set<string>();
+  sheetProjects.forEach((sp) => sheetTitleMap.add(sp.title.toLowerCase().trim()));
+
+  const uniqueCustom = rawCustomProjects.filter(
+    (cp) => !sheetTitleMap.has(cp.title.toLowerCase().trim())
+  );
+
+  // Format custom projects with overrides and chronological orderIndex
+  const maxSheetIndex = sheetProjects.length > 0 ? sheetProjects[sheetProjects.length - 1].orderIndex || sheetProjects.length : 1000;
+  const customProjects = uniqueCustom.map((cp, cIdx) => {
+    const override = overrides[cp.id] || overrides[cp.title];
+    const projectWithOverride = override ? { ...cp, ...override, isEdited: true } : cp;
+    return {
+      ...projectWithOverride,
+      orderIndex: (cp.orderIndex || maxSheetIndex + 1000 + (uniqueCustom.length - cIdx)),
+    };
+  });
+
+  // Combine with first preference given to recently added titles (from last in Excel sheet + custom)
+  // Reversing sheetProjects places the highest index (the bottom rows of Excel sheet) at the top
+  const reversedSheetProjects = [...sheetProjects].reverse();
+  const allProjects = [...customProjects, ...reversedSheetProjects];
 
   const result: FetchProjectsResult = {
     projects: allProjects,
@@ -489,3 +578,83 @@ export async function addProjectsBatch(newProjects: Array<Omit<Project, 'id' | '
     sheetMessage: webhookResult.message,
   };
 }
+
+/**
+ * Update an existing project (from sheet or custom) and sync changes to Excel files (.xlsx & .csv)
+ */
+export async function updateProject(
+  updatedData: Partial<Project> & { id: string }
+): Promise<{
+  project: Project;
+  excelUpdated: boolean;
+}> {
+  const id = updatedData.id;
+  if (!id) {
+    throw new Error('Project ID is required to update.');
+  }
+
+  let updatedProject: Project | null = null;
+  const isCustom = id.startsWith('custom-');
+
+  if (isCustom) {
+    const customProjects = getCustomProjects();
+    const index = customProjects.findIndex((p) => p.id === id);
+    if (index !== -1) {
+      customProjects[index] = {
+        ...customProjects[index],
+        ...updatedData,
+        isEdited: true,
+      };
+      saveCustomProjects(customProjects);
+      updatedProject = customProjects[index];
+    }
+  }
+
+  // Always update project overrides as well so that if an item is referenced by ID or sheet,
+  // the override is safely persisted across server restarts & live sheet fetches
+  const overrides = getProjectOverrides();
+  const existingOverride = overrides[id] || {};
+  overrides[id] = {
+    ...existingOverride,
+    ...updatedData,
+    isEdited: true,
+  };
+  saveProjectOverrides(overrides);
+
+  // Invalidate cache
+  cachedResult = null;
+
+  // Refresh and get full updated list
+  const fullData = await getProjects(true);
+  const found = fullData.projects.find((p) => p.id === id);
+  if (found) {
+    updatedProject = found;
+  }
+
+  // Sync updated catalog to project_catalog_data.xlsx and project_catalog_data.csv on disk!
+  const { csvUpdated, xlsxUpdated } = syncToExcelFiles(fullData.projects);
+
+  return {
+    project: updatedProject || (updatedData as Project),
+    excelUpdated: csvUpdated || xlsxUpdated,
+  };
+}
+
+/**
+ * Reset an edited sheet project back to its original sheet values
+ */
+export async function resetProjectOverride(
+  id: string
+): Promise<{ success: boolean; excelUpdated: boolean }> {
+  const overrides = getProjectOverrides();
+  if (overrides[id]) {
+    delete overrides[id];
+    saveProjectOverrides(overrides);
+    cachedResult = null;
+    const fullData = await getProjects(true);
+    const { csvUpdated, xlsxUpdated } = syncToExcelFiles(fullData.projects);
+    return { success: true, excelUpdated: csvUpdated || xlsxUpdated };
+  }
+  return { success: false, excelUpdated: false };
+}
+

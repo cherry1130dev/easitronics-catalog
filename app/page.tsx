@@ -22,7 +22,7 @@ function CatalogContent() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isFallback, setIsFallback] = useState<boolean>(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState<boolean>(false);
-  const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'title-asc'>('featured');
+  const [sortBy, setSortBy] = useState<'recent' | 'price-asc' | 'price-desc' | 'featured' | 'title-asc'>('recent');
 
   // Initialize filters from URL search params
   const [filters, setFilters] = useState<FilterState>(() => {
@@ -222,16 +222,25 @@ function CatalogContent() {
 
     // 7. Sorting
     result.sort((a, b) => {
+      if (sortBy === 'recent') {
+        return (b.orderIndex || 0) - (a.orderIndex || 0);
+      }
+      if (sortBy === 'price-asc') {
+        if (a.price !== b.price) {
+          return a.price - b.price;
+        }
+        return (b.orderIndex || 0) - (a.orderIndex || 0);
+      }
+      if (sortBy === 'price-desc') {
+        if (a.price !== b.price) {
+          return b.price - a.price;
+        }
+        return (b.orderIndex || 0) - (a.orderIndex || 0);
+      }
       if (sortBy === 'featured') {
         if (a.featured && !b.featured) return -1;
         if (!a.featured && b.featured) return 1;
-        return 0;
-      }
-      if (sortBy === 'price-asc') {
-        return a.price - b.price;
-      }
-      if (sortBy === 'price-desc') {
-        return b.price - a.price;
+        return (b.orderIndex || 0) - (a.orderIndex || 0);
       }
       if (sortBy === 'title-asc') {
         return a.title.localeCompare(b.title);
@@ -354,8 +363,52 @@ function CatalogContent() {
           </div>
 
           {/* Right: Sort Control & Mobile Filter Toggle */}
-          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-            {/* Sort Selector */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 ml-auto">
+            {/* Quick Sort Switcher Pills for Desktop/Tablet */}
+            <div className="hidden md:flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-lg text-xs">
+              <button
+                type="button"
+                onClick={() => setSortBy('recent')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-[11px] transition-all ${
+                  sortBy === 'recent'
+                    ? 'bg-amber-400 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="First Preference: Recently added titles (from last in Excel sheet)"
+              >
+                <span>🔥</span>
+                <span>Recently Added</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSortBy('price-asc')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-[11px] transition-all ${
+                  sortBy === 'price-asc'
+                    ? 'bg-amber-400 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Show low cost to high cost"
+              >
+                <span>💰</span>
+                <span>Low to High</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSortBy('featured')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-[11px] transition-all ${
+                  sortBy === 'featured'
+                    ? 'bg-amber-400 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>⭐</span>
+                <span>Featured</span>
+              </button>
+            </div>
+
+            {/* Sort Selector Dropdown */}
             <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs">
               <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <label htmlFor="sortSelect" className="text-slate-400 font-medium hidden sm:inline">
@@ -367,10 +420,11 @@ function CatalogContent() {
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="bg-transparent text-white font-semibold outline-none cursor-pointer text-xs"
               >
-                <option value="featured" className="bg-slate-900 text-white">Featured First</option>
-                <option value="price-asc" className="bg-slate-900 text-white">Price: Low to High</option>
-                <option value="price-desc" className="bg-slate-900 text-white">Price: High to Low</option>
-                <option value="title-asc" className="bg-slate-900 text-white">Title: A to Z</option>
+                <option value="recent" className="bg-slate-900 text-white">🔥 Recently Added (First Preference)</option>
+                <option value="price-asc" className="bg-slate-900 text-white">💰 Price: Low to High</option>
+                <option value="price-desc" className="bg-slate-900 text-white">📈 Price: High to Low</option>
+                <option value="featured" className="bg-slate-900 text-white">⭐ Featured First</option>
+                <option value="title-asc" className="bg-slate-900 text-white">🔤 Title: A to Z</option>
               </select>
             </div>
 

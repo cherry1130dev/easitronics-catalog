@@ -31,6 +31,8 @@ export interface Project {
   tags: string[];
   featured: boolean;
   source?: 'sheet' | 'custom';
+  isEdited?: boolean;
+  orderIndex?: number;
 }
 
 export interface FilterState {

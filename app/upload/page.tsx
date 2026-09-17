@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -17,16 +17,24 @@ import {
   Check,
   Copy,
   FileSpreadsheet,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Search,
+  RotateCcw,
+  X,
+  IndianRupee,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { GOOGLE_SHEET_VIEW_URL } from '@/lib/constants';
+import { Project, ProjectKind } from '@/lib/types';
 
 const BRANCH_OPTIONS = ['ECE', 'CSE', 'EEE', 'Mechanical', 'Civil', 'Medical', 'Other'];
 const DOMAIN_OPTIONS = ['IoT', 'Embedded', 'Robotics', 'Machine Learning', 'Simulation', 'Large AI', 'Other'];
 
 export default function UploadPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'form' | 'csv' | 'sheet'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'csv' | 'edit' | 'sheet'>('form');
 
   // Single Project Form State
   const [formData, setFormData] = useState({
@@ -59,6 +67,179 @@ export default function UploadPage() {
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [webhookSaveMsg, setWebhookSaveMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Existing Titles & Edit State
+  const [existingProjects, setExistingProjects] = useState<Project[]>([]);
+  const [loadingExisting, setLoadingExisting] = useState(false);
+  const [editSearch, setEditSearch] = useState('');
+  const [editDomainFilter, setEditDomainFilter] = useState('All');
+  const [editBranchFilter, setEditBranchFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+
+  // Editing Project Modal State
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    branch: 'ECE',
+    domain: 'IoT',
+    customDomain: '',
+    type: 'Prototype' as ProjectKind,
+    price: '15000',
+    description: '',
+    tags: '',
+    demoVideoUrl: '',
+    featured: false,
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
+  const [editErrorMsg, setEditErrorMsg] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+
+  // Fetch all existing catalog projects for editing
+  const loadExistingProjects = async (force = false) => {
+    try {
+      setLoadingExisting(true);
+      const url = force ? '/api/projects?refresh=true' : '/api/projects';
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.projects) {
+        setExistingProjects(data.projects);
+      }
+    } catch (err) {
+      console.error('Failed to load existing projects:', err);
+    } finally {
+      setLoadingExisting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'edit' && existingProjects.length === 0) {
+      loadExistingProjects();
+    }
+  }, [activeTab]);
+
+  const handleOpenEdit = (project: Project) => {
+    setEditingProject(project);
+    setEditSuccessMsg(null);
+    setEditErrorMsg(null);
+    const isPredefinedDomain = DOMAIN_OPTIONS.includes(project.domain);
+    setEditFormData({
+      title: project.title,
+      branch: project.branch,
+      domain: isPredefinedDomain ? project.domain : 'Other',
+      customDomain: isPredefinedDomain ? '' : project.domain,
+      type: project.type,
+      price: String(project.price),
+      description: project.description,
+      tags: project.tags.join(', '),
+      demoVideoUrl: project.demoVideoUrl || '',
+      featured: Boolean(project.featured),
+    });
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProject) return;
+
+    if (!editFormData.title.trim()) {
+      setEditErrorMsg('Project title is required.');
+      return;
+    }
+
+    setEditSaving(true);
+    setEditSuccessMsg(null);
+    setEditErrorMsg(null);
+
+    const finalDomain =
+      editFormData.domain === 'Other' && editFormData.customDomain.trim()
+        ? editFormData.customDomain.trim()
+        : editFormData.domain;
+
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingProject.id,
+          title: editFormData.title.trim(),
+          branch: editFormData.branch,
+          domain: finalDomain,
+          type: editFormData.type,
+          price: parseInt(editFormData.price.replace(/[^0-9]/g, ''), 10) || 10000,
+          description: editFormData.description.trim(),
+          tags: editFormData.tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean),
+          demoVideoUrl: editFormData.demoVideoUrl.trim() || undefined,
+          featured: editFormData.featured,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update project');
+      }
+
+      setExistingProjects((prev) =>
+        prev.map((p) => (p.id === editingProject.id ? { ...data.project, isEdited: true } : p))
+      );
+
+      setEditSuccessMsg(
+        `Project "${data.project.title}" successfully updated! Both Excel sheet (.xlsx & .csv) and catalog updated.`
+      );
+      setEditingProject(null);
+    } catch (err: any) {
+      setEditErrorMsg(err.message || 'Error updating project');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleResetProject = async (id: string, title: string) => {
+    if (!confirm(`Reset "${title}" back to original Excel sheet values?`)) {
+      return;
+    }
+    setResettingId(id);
+    try {
+      const res = await fetch(`/api/projects?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset project');
+      setEditSuccessMsg(data.message || 'Project reset to original values.');
+      await loadExistingProjects(true);
+    } catch (err: any) {
+      setEditErrorMsg(err.message || 'Failed to reset project');
+    } finally {
+      setResettingId(null);
+    }
+  };
+
+  const filteredExisting = useMemo(() => {
+    return existingProjects.filter((p) => {
+      if (editDomainFilter !== 'All' && p.domain.toLowerCase() !== editDomainFilter.toLowerCase()) return false;
+      if (editBranchFilter !== 'All' && p.branch.toLowerCase() !== editBranchFilter.toLowerCase()) return false;
+      if (editSearch.trim()) {
+        const q = editSearch.toLowerCase().trim();
+        return (
+          p.title.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) ||
+          p.domain.toLowerCase().includes(q) ||
+          p.branch.toLowerCase().includes(q) ||
+          p.id.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [existingProjects, editDomainFilter, editBranchFilter, editSearch]);
+
+  const totalPages = Math.ceil(filteredExisting.length / pageSize) || 1;
+  const paginatedProjects = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredExisting.slice(start, start + pageSize);
+  }, [filteredExisting, currentPage]);
 
   // Load existing webhook configuration
   useEffect(() => {
@@ -367,6 +548,23 @@ function doPost(e) {
           </button>
 
           <button
+            onClick={() => setActiveTab('edit')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'edit'
+                ? 'bg-amber-400 text-slate-950 shadow-sm'
+                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            <Pencil className="w-4 h-4" />
+            <span>Edit Existing Titles</span>
+            {existingProjects.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-950/60 font-mono text-amber-300">
+                {existingProjects.length}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('sheet')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               activeTab === 'sheet'
@@ -652,7 +850,342 @@ function doPost(e) {
           </div>
         )}
 
-        {/* TAB 3: Google Sheet & Excel Auto-Sync */}
+        {/* TAB 3: Edit Existing Titles from Sheet & Catalog */}
+        {activeTab === 'edit' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-md space-y-6">
+            {/* Tab Header & Quick Stats */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="text-lg font-bold text-white">Edit Existing Project Titles</h2>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-800">
+                    Live Excel Editor
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Search and edit existing projects from your Excel sheets or catalog. Updated costs, titles, domains, and branches are <strong>automatically synced to project_catalog_data.xlsx & .csv</strong> on the server!
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => loadExistingProjects(true)}
+                disabled={loadingExisting}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition-all active:scale-95 disabled:opacity-50"
+                title="Refresh project list"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingExisting ? 'animate-spin text-amber-400' : ''}`} />
+                <span>{loadingExisting ? 'Refreshing...' : 'Refresh Titles'}</span>
+              </button>
+            </div>
+
+            {/* Notifications */}
+            {editSuccessMsg && (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-xs">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <div className="flex-1">{editSuccessMsg}</div>
+                <button
+                  type="button"
+                  onClick={() => setEditSuccessMsg(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {editErrorMsg && (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <div className="flex-1">{editErrorMsg}</div>
+                <button
+                  type="button"
+                  onClick={() => setEditErrorMsg(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Search & Filter Toolbar */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+                {/* Search Input */}
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={editSearch}
+                    onChange={(e) => {
+                      setEditSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="Search by title, domain, branch, or ID..."
+                    className="w-full pl-9 pr-8 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400"
+                  />
+                  {editSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditSearch('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Domain Filter */}
+                <div className="w-full md:w-44">
+                  <select
+                    value={editDomainFilter}
+                    onChange={(e) => {
+                      setEditDomainFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-amber-400"
+                  >
+                    <option value="All">All Domains</option>
+                    {DOMAIN_OPTIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Branch Filter */}
+                <div className="w-full md:w-40">
+                  <select
+                    value={editBranchFilter}
+                    onChange={(e) => {
+                      setEditBranchFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none cursor-pointer focus:border-amber-400"
+                  >
+                    <option value="All">All Branches</option>
+                    {BRANCH_OPTIONS.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Status Bar */}
+              <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
+                <div>
+                  Showing <span className="text-amber-400 font-bold">{filteredExisting.length}</span> matching titles{' '}
+                  <span className="text-slate-600">({existingProjects.length} total in catalog)</span>
+                </div>
+
+                {(editSearch || editDomainFilter !== 'All' || editBranchFilter !== 'All') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditSearch('');
+                      setEditDomainFilter('All');
+                      setEditBranchFilter('All');
+                      setCurrentPage(1);
+                    }}
+                    className="text-amber-400 hover:text-amber-300 font-semibold underline text-xs"
+                  >
+                    Reset Search Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Existing Titles Table */}
+            {loadingExisting && existingProjects.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-400" />
+                <span>Loading existing titles from catalog & Excel sheet...</span>
+              </div>
+            ) : filteredExisting.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 bg-slate-950 rounded-xl border border-slate-800">
+                <p className="text-sm font-semibold text-white mb-1">No matching titles found</p>
+                <p className="text-xs">Try adjusting your search query or branch/domain filters.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-900 text-slate-400 uppercase text-[10px] tracking-wider sticky top-0 border-b border-slate-800">
+                      <tr>
+                        <th className="px-3.5 py-3 w-12">#</th>
+                        <th className="px-3.5 py-3">Title</th>
+                        <th className="px-3.5 py-3">Branch</th>
+                        <th className="px-3.5 py-3">Domain</th>
+                        <th className="px-3.5 py-3">Type</th>
+                        <th className="px-3.5 py-3">Cost (₹)</th>
+                        <th className="px-3.5 py-3">Status</th>
+                        <th className="px-3.5 py-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {paginatedProjects.map((project, idx) => {
+                        const serialNum = (currentPage - 1) * pageSize + idx + 1;
+                        return (
+                          <tr
+                            key={project.id}
+                            className="hover:bg-slate-900/60 transition-colors group"
+                          >
+                            <td className="px-3.5 py-3 font-mono text-slate-500 text-[11px]">
+                              #{serialNum}
+                            </td>
+                            <td className="px-3.5 py-3 max-w-sm">
+                              <div className="font-semibold text-white group-hover:text-amber-300 transition-colors leading-snug">
+                                {project.title}
+                              </div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                                {project.description}
+                              </div>
+                            </td>
+                            <td className="px-3.5 py-3 whitespace-nowrap">
+                              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-medium">
+                                {project.branch}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-3 whitespace-nowrap">
+                              <span className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60 text-[10px] font-semibold">
+                                {project.domain}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-3 whitespace-nowrap">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  project.type === 'Product'
+                                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                                    : 'bg-blue-950/80 text-blue-300 border border-blue-800'
+                                }`}
+                              >
+                                {project.type}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-3 whitespace-nowrap font-mono font-bold text-amber-300">
+                              ₹{project.price.toLocaleString('en-IN')}
+                            </td>
+                            <td className="px-3.5 py-3 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                {project.source === 'custom' ? (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800">
+                                    Custom
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                                    Sheet
+                                  </span>
+                                )}
+                                {project.isEdited && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-800">
+                                    Edited
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3.5 py-3 whitespace-nowrap text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEdit(project)}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-sm transition-all active:scale-95"
+                                  title="Edit Title, Cost, Domain & Specs"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+
+                                {project.isEdited && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResetProject(project.id, project.title)}
+                                    disabled={resettingId === project.id}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-slate-800 border border-transparent hover:border-rose-900 transition-all"
+                                    title="Reset back to original sheet values"
+                                  >
+                                    <RotateCcw className={`w-3.5 h-3.5 ${resettingId === project.id ? 'animate-spin' : ''}`} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2 text-xs text-slate-400">
+                    <div>
+                      Page <strong className="text-white">{currentPage}</strong> of <strong className="text-white">{totalPages}</strong>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-950 transition-colors flex items-center gap-1"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Prev</span>
+                      </button>
+
+                      <div className="hidden sm:flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum = currentPage;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
+                                currentPage === pageNum
+                                  ? 'bg-amber-400 text-slate-950 font-bold'
+                                  : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-950 transition-colors flex items-center gap-1"
+                      >
+                        <span>Next</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: Google Sheet & Excel Auto-Sync */}
         {activeTab === 'sheet' && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-md space-y-6">
             <div>
@@ -873,6 +1406,237 @@ function doPost(e) {
           </div>
         )}
       </div>
+
+      {/* Edit Project Modal */}
+      {editingProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => !editSaving && setEditingProject(null)}
+          />
+          <div className="relative w-full max-w-2xl max-h-[92vh] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-10 overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-900/90 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-400/10 text-amber-400 border border-amber-400/20">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base sm:text-lg leading-tight">
+                    Edit Project Specifications
+                  </h3>
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                    <span className="font-mono">ID: {editingProject.id}</span>
+                    <span>•</span>
+                    <span className="capitalize">{editingProject.source || 'Sheet'} origin</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => !editSaving && setEditingProject(null)}
+                disabled={editSaving}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Form Body */}
+            <form onSubmit={handleSaveEdit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+              {editErrorMsg && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                  <span>{editErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Title Field */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Project Title / Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.title}
+                  onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                  placeholder="e.g. Real-Time Object Tracking Robot Using YOLO"
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:border-amber-400 outline-none"
+                />
+              </div>
+
+              {/* Branch, Domain, Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Engineering Branch
+                  </label>
+                  <select
+                    value={editFormData.branch}
+                    onChange={(e) => setEditFormData({ ...editFormData, branch: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs outline-none cursor-pointer focus:border-amber-400"
+                  >
+                    {BRANCH_OPTIONS.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Technology Domain
+                  </label>
+                  <select
+                    value={editFormData.domain}
+                    onChange={(e) => setEditFormData({ ...editFormData, domain: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs outline-none cursor-pointer focus:border-amber-400"
+                  >
+                    {DOMAIN_OPTIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Project Type
+                  </label>
+                  <select
+                    value={editFormData.type}
+                    onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value as ProjectKind })}
+                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs outline-none cursor-pointer focus:border-amber-400"
+                  >
+                    <option value="Prototype">Prototype</option>
+                    <option value="Product">Product</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Custom domain if Other */}
+              {editFormData.domain === 'Other' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Custom Technology Domain Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.customDomain}
+                    onChange={(e) => setEditFormData({ ...editFormData, customDomain: e.target.value })}
+                    placeholder="e.g. Biomedical Signals, Blockchain, etc."
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:border-amber-400 outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Price & Tags */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Estimated Cost / Price (₹) *
+                  </label>
+                  <div className="relative">
+                    <IndianRupee className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="number"
+                      required
+                      value={editFormData.price}
+                      onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })}
+                      placeholder="15000"
+                      className="w-full pl-9 pr-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm font-mono focus:border-amber-400 outline-none"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Catalog cost estimation in Indian Rupees
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Technology Tags (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.tags}
+                    onChange={(e) => setEditFormData({ ...editFormData, tags: e.target.value })}
+                    placeholder="YOLO, AI, Computer Vision, Raspberry Pi"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:border-amber-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Project Description & Overview
+                </label>
+                <textarea
+                  rows={4}
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  placeholder="Describe the hardware, sensors, algorithms, or application flow..."
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:border-amber-400 outline-none resize-y"
+                />
+              </div>
+
+              {/* Video URL */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Demo Video Link (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={editFormData.demoVideoUrl}
+                  onChange={(e) => setEditFormData({ ...editFormData, demoVideoUrl: e.target.value })}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:border-amber-400 outline-none"
+                />
+              </div>
+
+              {/* Featured toggle */}
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="modalFeatured"
+                  checked={editFormData.featured}
+                  onChange={(e) => setEditFormData({ ...editFormData, featured: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-amber-400 focus:ring-amber-400"
+                />
+                <label htmlFor="modalFeatured" className="text-xs font-semibold text-slate-300 cursor-pointer">
+                  Feature this project in top picks banner & badges
+                </label>
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => !editSaving && setEditingProject(null)}
+                  disabled={editSaving}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${editSaving ? 'animate-spin' : 'hidden'}`} />
+                  <span>{editSaving ? 'Saving Changes...' : 'Save Changes & Update Excel'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
