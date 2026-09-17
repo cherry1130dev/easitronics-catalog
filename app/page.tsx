@@ -60,7 +60,21 @@ function CatalogContent() {
       const data = await res.json();
 
       if (data.projects) {
-        setAllProjects(data.projects);
+        let projects: Project[] = data.projects;
+        try {
+          const stored = localStorage.getItem('easitronics_project_overrides');
+          if (stored) {
+            const overridesObj = JSON.parse(stored);
+            projects = projects.map((p) => {
+              const override = overridesObj[p.id] || (p.title ? overridesObj[p.title] : null);
+              if (override) {
+                return { ...p, ...override, isEdited: true };
+              }
+              return p;
+            });
+          }
+        } catch (_) {}
+        setAllProjects(projects);
         setIsFallback(Boolean(data.isFallback));
       }
     } catch (err) {

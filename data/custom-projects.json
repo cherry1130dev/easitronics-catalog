@@ -1,10 +1,10 @@
 [
   {
-    "title": "AI IoT Hydroponics Smart Farming System",
+    "title": "AI IoT Hydroponics Smart Farming System [Verified Updated]",
     "domain": "IoT",
     "branch": "ECE",
     "type": "Product",
-    "price": 18500,
+    "price": 9000,
     "description": "Autonomous hydroponics sensor system with real-time nutrient balancing and cloud analytics.",
     "tags": [
       "Hydroponics",
@@ -12,9 +12,12 @@
       "ECE",
       "Sensors"
     ],
-    "featured": false,
+    "featured": true,
     "id": "custom-1789131324350-7yzhn",
-    "source": "custom"
+    "source": "custom",
+    "isEdited": true,
+    "orderIndex": 1722,
+    "originalTitle": "AI IoT Hydroponics Smart Farming System"
   },
   {
     "title": "Small Three-Phase Fault Detection System",

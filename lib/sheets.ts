@@ -1,15 +1,25 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import * as XLSX from 'xlsx';
 import { Project, ProjectKind } from './types';
 
 import { GOOGLE_SHEET_CSV_URL, GOOGLE_SHEET_VIEW_URL } from './constants';
 export { GOOGLE_SHEET_CSV_URL, GOOGLE_SHEET_VIEW_URL };
 
+// Directory and file paths (local dev + /tmp fallback for Vercel/serverless environments)
 const DATA_DIR = path.join(process.cwd(), 'data');
+const TMP_DATA_DIR = path.join(os.tmpdir(), 'easitronics_data');
+
 const CUSTOM_PROJECTS_FILE = path.join(DATA_DIR, 'custom-projects.json');
+const TMP_CUSTOM_PROJECTS_FILE = path.join(TMP_DATA_DIR, 'custom-projects.json');
+
 const OVERRIDES_FILE = path.join(DATA_DIR, 'project-overrides.json');
+const TMP_OVERRIDES_FILE = path.join(TMP_DATA_DIR, 'project-overrides.json');
+
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const TMP_SETTINGS_FILE = path.join(TMP_DATA_DIR, 'settings.json');
+
 const EXCEL_FILE_PATH = path.join(process.cwd(), 'project_catalog_data.xlsx');
 const CSV_FILE_PATH = path.join(process.cwd(), 'project_catalog_data.csv');
 
@@ -22,10 +32,14 @@ interface FetchProjectsResult {
   totalCustom: number;
 }
 
-// In-memory cache
+// In-memory runtime cache for serverless resiliency
 let cachedResult: FetchProjectsResult | null = null;
 let lastCacheTime = 0;
 const CACHE_TTL_MS = 60 * 1000; // 1 minute TTL, easily refreshed on demand
+
+let memoryOverrides: Record<string, Partial<Project>> = {};
+let memoryCustomProjects: Project[] | null = null;
+let memorySettings: Record<string, any> = {};
 
 /**
  * Robust RFC-compliant CSV parser
@@ -85,65 +99,122 @@ function cleanCitations(str: string): string {
 
 /**
  * Get saved project overrides (edits made to existing sheet/catalog titles)
+ * Reads from in-memory cache, local data directory, and /tmp fallback for serverless.
  */
 export function getProjectOverrides(): Record<string, Partial<Project>> {
+  const result: Record<string, Partial<Project>> = { ...memoryOverrides };
+
+  // 1. Read from persistent local project-overrides.json if exists
   try {
-    if (!fs.existsSync(OVERRIDES_FILE)) {
-      return {};
+    if (fs.existsSync(OVERRIDES_FILE)) {
+      const raw = fs.readFileSync(OVERRIDES_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        Object.assign(result, parsed);
+      }
     }
-    const raw = fs.readFileSync(OVERRIDES_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('Error reading project overrides file:', err);
-    return {};
-  }
+  } catch (_) {}
+
+  // 2. Read from /tmp if exists (Vercel serverless writable storage)
+  try {
+    if (fs.existsSync(TMP_OVERRIDES_FILE)) {
+      const raw = fs.readFileSync(TMP_OVERRIDES_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        Object.assign(result, parsed);
+      }
+    }
+  } catch (_) {}
+
+  // Sync memory cache
+  Object.assign(memoryOverrides, result);
+  return result;
 }
 
 /**
- * Save project overrides locally
+ * Save project overrides locally, in /tmp for Vercel, and in memory
  */
 export function saveProjectOverrides(overrides: Record<string, Partial<Project>>): void {
+  // Set memory state directly to overrides
+  memoryOverrides = { ...overrides };
+  cachedResult = null;
+
+  // Save to /tmp (always writable in Vercel / AWS Lambda)
+  try {
+    if (!fs.existsSync(TMP_DATA_DIR)) {
+      fs.mkdirSync(TMP_DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(TMP_OVERRIDES_FILE, JSON.stringify(overrides, null, 2), 'utf-8');
+  } catch (_) {}
+
+  // Save to local project directory if writable
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(OVERRIDES_FILE, JSON.stringify(overrides, null, 2), 'utf-8');
-    cachedResult = null;
-  } catch (err) {
-    console.error('Error saving project overrides file:', err);
-  }
+  } catch (_) {}
 }
 
 /**
  * Get locally saved custom/uploaded projects
  */
 export function getCustomProjects(): Project[] {
-  try {
-    if (!fs.existsSync(CUSTOM_PROJECTS_FILE)) {
-      return [];
-    }
-    const raw = fs.readFileSync(CUSTOM_PROJECTS_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('Error reading custom projects file:', err);
-    return [];
+  if (memoryCustomProjects !== null && memoryCustomProjects.length > 0) {
+    return [...memoryCustomProjects];
   }
+
+  let projects: Project[] = [];
+
+  try {
+    if (fs.existsSync(CUSTOM_PROJECTS_FILE)) {
+      const raw = fs.readFileSync(CUSTOM_PROJECTS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        projects = parsed;
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (fs.existsSync(TMP_CUSTOM_PROJECTS_FILE)) {
+      const raw = fs.readFileSync(TMP_CUSTOM_PROJECTS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(projects.map((p) => p.id));
+        parsed.forEach((p: Project) => {
+          if (!existingIds.has(p.id)) {
+            projects.push(p);
+          }
+        });
+      }
+    }
+  } catch (_) {}
+
+  memoryCustomProjects = [...projects];
+  return projects;
 }
 
 /**
- * Save custom projects locally
+ * Save custom projects locally, in /tmp, and in memory
  */
 export function saveCustomProjects(projects: Project[]): void {
+  memoryCustomProjects = [...projects];
+  cachedResult = null;
+
+  try {
+    if (!fs.existsSync(TMP_DATA_DIR)) {
+      fs.mkdirSync(TMP_DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(TMP_CUSTOM_PROJECTS_FILE, JSON.stringify(projects, null, 2), 'utf-8');
+  } catch (_) {}
+
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(CUSTOM_PROJECTS_FILE, JSON.stringify(projects, null, 2), 'utf-8');
-    // Invalidate cache
-    cachedResult = null;
-  } catch (err) {
-    console.error('Error saving custom projects file:', err);
-  }
+  } catch (_) {}
 }
 
 /**
@@ -240,7 +311,11 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
         orderIndex: idx + 1, // Higher index means added later in Excel sheet
       };
 
-      const override = overrides[id] || overrides[title];
+      const override =
+        overrides[id] ||
+        overrides[title] ||
+        overrides[title.toLowerCase().trim()] ||
+        overrides[id.toLowerCase()];
       if (override) {
         return {
           ...baseProject,
@@ -283,7 +358,11 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
             orderIndex: idx + 1,
           };
 
-          const override = overrides[id] || overrides[title];
+          const override =
+            overrides[id] ||
+            overrides[title] ||
+            overrides[title.toLowerCase().trim()] ||
+            overrides[id.toLowerCase()];
           if (override) {
             return {
               ...baseProject,
@@ -314,7 +393,11 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
   // Format custom projects with overrides and chronological orderIndex
   const maxSheetIndex = sheetProjects.length > 0 ? sheetProjects[sheetProjects.length - 1].orderIndex || sheetProjects.length : 1000;
   const customProjects = uniqueCustom.map((cp, cIdx) => {
-    const override = overrides[cp.id] || overrides[cp.title];
+    const override =
+      overrides[cp.id] ||
+      overrides[cp.title] ||
+      overrides[cp.title.toLowerCase().trim()] ||
+      overrides[cp.id.toLowerCase()];
     const projectWithOverride = override ? { ...cp, ...override, isEdited: true } : cp;
     return {
       ...projectWithOverride,
@@ -348,6 +431,16 @@ export function getGoogleSheetWebhookUrl(): string {
   if (process.env.GOOGLE_SHEET_WEBHOOK_URL) {
     return process.env.GOOGLE_SHEET_WEBHOOK_URL.trim();
   }
+  if (memorySettings.googleSheetWebhookUrl) {
+    return memorySettings.googleSheetWebhookUrl.trim();
+  }
+  try {
+    if (fs.existsSync(TMP_SETTINGS_FILE)) {
+      const raw = fs.readFileSync(TMP_SETTINGS_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.googleSheetWebhookUrl) return data.googleSheetWebhookUrl.trim();
+    }
+  } catch (_) {}
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const raw = fs.readFileSync(SETTINGS_FILE, 'utf-8');
@@ -362,6 +455,17 @@ export function getGoogleSheetWebhookUrl(): string {
  * Save Google Sheet Webhook URL
  */
 export function setGoogleSheetWebhookUrl(url: string): void {
+  const trimmedUrl = url.trim();
+  memorySettings.googleSheetWebhookUrl = trimmedUrl;
+  memorySettings.lastUpdated = new Date().toISOString();
+
+  try {
+    if (!fs.existsSync(TMP_DATA_DIR)) {
+      fs.mkdirSync(TMP_DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(TMP_SETTINGS_FILE, JSON.stringify(memorySettings, null, 2), 'utf-8');
+  } catch (_) {}
+
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -372,12 +476,10 @@ export function setGoogleSheetWebhookUrl(url: string): void {
         data = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
       } catch (_) {}
     }
-    data.googleSheetWebhookUrl = url.trim();
+    data.googleSheetWebhookUrl = trimmedUrl;
     data.lastUpdated = new Date().toISOString();
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Failed to save settings:', err);
-  }
+  } catch (_) {}
 }
 
 /**
@@ -505,6 +607,57 @@ export async function pushToGoogleSheetWebhook(
 }
 
 /**
+ * Push an edited project update to the connected Google Apps Script Webhook
+ */
+export async function updateGoogleSheetWebhook(
+  project: Project,
+  originalTitle?: string
+): Promise<{ success: boolean; message: string }> {
+  const webhookUrl = getGoogleSheetWebhookUrl();
+  if (!webhookUrl) {
+    return {
+      success: false,
+      message: 'Google Sheets Webhook URL not configured.',
+    };
+  }
+
+  try {
+    const payload = {
+      action: 'update',
+      originalTitle: originalTitle || project.title,
+      id: project.id,
+      project: {
+        title: project.title,
+        domain: project.domain,
+        branch: project.branch,
+        type: project.type,
+        price: project.price,
+        description: project.description,
+        imageUrl: 'ADD_IMAGE_LINK',
+        demoVideoUrl: project.demoVideoUrl || 'ADD_VIDEO_LINK',
+        tags: project.tags,
+        featured: project.featured,
+      },
+    };
+
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      return { success: true, message: `Successfully synced edits to live Google Sheet!` };
+    } else {
+      return { success: false, message: `Google Sheet Webhook returned status ${res.status}` };
+    }
+  } catch (err: any) {
+    console.warn('Google Sheet Webhook sync note:', err.message);
+    return { success: false, message: `Google Sheet push note: ${err.message}` };
+  }
+}
+
+/**
  * Add a new custom project & automatically update Excel sheet (.xlsx/.csv) and Google Sheet
  */
 export async function addProject(newProject: Omit<Project, 'id' | 'source'>): Promise<{
@@ -528,8 +681,14 @@ export async function addProject(newProject: Omit<Project, 'id' | 'source'>): Pr
   cachedResult = null;
 
   // 1. Automatically update local Excel files (.xlsx & .csv)
-  const fullData = await getProjects(true);
-  const { csvUpdated, xlsxUpdated } = syncToExcelFiles(fullData.projects);
+  let csvUpdated = false;
+  let xlsxUpdated = false;
+  try {
+    const fullData = await getProjects(true);
+    const syncRes = syncToExcelFiles(fullData.projects);
+    csvUpdated = syncRes.csvUpdated;
+    xlsxUpdated = syncRes.xlsxUpdated;
+  } catch (_) {}
 
   // 2. Automatically push to live Google Sheet if webhook is configured
   const webhookResult = await pushToGoogleSheetWebhook([newProject]);
@@ -565,8 +724,14 @@ export async function addProjectsBatch(newProjects: Array<Omit<Project, 'id' | '
   cachedResult = null;
 
   // 1. Automatically update local Excel files (.xlsx & .csv)
-  const fullData = await getProjects(true);
-  const { csvUpdated, xlsxUpdated } = syncToExcelFiles(fullData.projects);
+  let csvUpdated = false;
+  let xlsxUpdated = false;
+  try {
+    const fullData = await getProjects(true);
+    const syncRes = syncToExcelFiles(fullData.projects);
+    csvUpdated = syncRes.csvUpdated;
+    xlsxUpdated = syncRes.xlsxUpdated;
+  } catch (_) {}
 
   // 2. Automatically push to live Google Sheet if webhook is configured
   const webhookResult = await pushToGoogleSheetWebhook(newProjects);
@@ -580,63 +745,86 @@ export async function addProjectsBatch(newProjects: Array<Omit<Project, 'id' | '
 }
 
 /**
- * Update an existing project (from sheet or custom) and sync changes to Excel files (.xlsx & .csv)
+ * Update an existing project (from sheet or custom) and sync changes to Excel files (.xlsx & .csv) and Google Sheet
  */
 export async function updateProject(
-  updatedData: Partial<Project> & { id: string }
+  updatedData: Partial<Project> & { id: string; originalTitle?: string }
 ): Promise<{
   project: Project;
   excelUpdated: boolean;
+  sheetSynced: boolean;
+  sheetMessage?: string;
 }> {
   const id = updatedData.id;
   if (!id) {
     throw new Error('Project ID is required to update.');
   }
 
-  let updatedProject: Project | null = null;
+  // 1. Retrieve current project from catalog if available
+  const currentResult = await getProjects(false);
+  const existing = currentResult.projects.find((p) => p.id === id);
+  const origTitle = updatedData.originalTitle || existing?.title;
   const isCustom = id.startsWith('custom-');
 
+  // 2. Form definitive merged project - guarantee user's edits are NOT overwritten
+  const mergedProject: Project = {
+    ...(existing || {}),
+    ...updatedData,
+    id,
+    source: existing?.source || (isCustom ? 'custom' : 'sheet'),
+    isEdited: true,
+  } as Project;
+
+  // 3. If custom project, update custom projects list
   if (isCustom) {
     const customProjects = getCustomProjects();
     const index = customProjects.findIndex((p) => p.id === id);
     if (index !== -1) {
-      customProjects[index] = {
-        ...customProjects[index],
-        ...updatedData,
-        isEdited: true,
-      };
-      saveCustomProjects(customProjects);
-      updatedProject = customProjects[index];
+      customProjects[index] = { ...customProjects[index], ...mergedProject };
+    } else {
+      customProjects.unshift(mergedProject);
     }
+    saveCustomProjects(customProjects);
   }
 
-  // Always update project overrides as well so that if an item is referenced by ID or sheet,
-  // the override is safely persisted across server restarts & live sheet fetches
+  // 4. Update overrides keyed by ID, original title, and new title
   const overrides = getProjectOverrides();
-  const existingOverride = overrides[id] || {};
-  overrides[id] = {
-    ...existingOverride,
-    ...updatedData,
-    isEdited: true,
-  };
+  overrides[id] = { ...mergedProject };
+  overrides[id.toLowerCase()] = { ...mergedProject };
+
+  if (origTitle) {
+    overrides[origTitle] = { ...mergedProject };
+    overrides[origTitle.toLowerCase().trim()] = { ...mergedProject };
+  }
+  if (mergedProject.title) {
+    overrides[mergedProject.title] = { ...mergedProject };
+    overrides[mergedProject.title.toLowerCase().trim()] = { ...mergedProject };
+  }
   saveProjectOverrides(overrides);
 
-  // Invalidate cache
+  // 5. Invalidate cached catalog
   cachedResult = null;
 
-  // Refresh and get full updated list
-  const fullData = await getProjects(true);
-  const found = fullData.projects.find((p) => p.id === id);
-  if (found) {
-    updatedProject = found;
+  // 6. Sync updated catalog to project_catalog_data.xlsx and project_catalog_data.csv on disk if writable
+  let csvUpdated = false;
+  let xlsxUpdated = false;
+  try {
+    const fullData = await getProjects(true);
+    const syncRes = syncToExcelFiles(fullData.projects);
+    csvUpdated = syncRes.csvUpdated;
+    xlsxUpdated = syncRes.xlsxUpdated;
+  } catch (err) {
+    console.warn('Excel files sync error:', err);
   }
 
-  // Sync updated catalog to project_catalog_data.xlsx and project_catalog_data.csv on disk!
-  const { csvUpdated, xlsxUpdated } = syncToExcelFiles(fullData.projects);
+  // 7. Push update directly to Google Sheet Webhook if configured
+  const webhookResult = await updateGoogleSheetWebhook(mergedProject, origTitle);
 
   return {
-    project: updatedProject || (updatedData as Project),
+    project: mergedProject,
     excelUpdated: csvUpdated || xlsxUpdated,
+    sheetSynced: webhookResult.success,
+    sheetMessage: webhookResult.message,
   };
 }
 
@@ -644,17 +832,49 @@ export async function updateProject(
  * Reset an edited sheet project back to its original sheet values
  */
 export async function resetProjectOverride(
-  id: string
+  id: string,
+  title?: string
 ): Promise<{ success: boolean; excelUpdated: boolean }> {
   const overrides = getProjectOverrides();
-  if (overrides[id]) {
-    delete overrides[id];
+  let deleted = false;
+
+  const normalizedId = id.trim().toLowerCase();
+  const normalizedTitle = title?.trim().toLowerCase();
+
+  for (const key of Object.keys(overrides)) {
+    const ov = overrides[key];
+    const keyLower = key.toLowerCase().trim();
+    const matchesId =
+      keyLower === normalizedId ||
+      (ov?.id && ov.id.toLowerCase().trim() === normalizedId);
+    const matchesTitle =
+      normalizedTitle &&
+      (keyLower === normalizedTitle ||
+        (ov?.title && ov.title.toLowerCase().trim() === normalizedTitle) ||
+        ((ov as any)?.originalTitle &&
+          (ov as any).originalTitle.toLowerCase().trim() === normalizedTitle));
+
+    if (matchesId || matchesTitle) {
+      delete overrides[key];
+      delete memoryOverrides[key];
+      deleted = true;
+    }
+  }
+
+  if (deleted) {
     saveProjectOverrides(overrides);
     cachedResult = null;
-    const fullData = await getProjects(true);
-    const { csvUpdated, xlsxUpdated } = syncToExcelFiles(fullData.projects);
+    let csvUpdated = false;
+    let xlsxUpdated = false;
+    try {
+      const fullData = await getProjects(true);
+      const syncRes = syncToExcelFiles(fullData.projects);
+      csvUpdated = syncRes.csvUpdated;
+      xlsxUpdated = syncRes.xlsxUpdated;
+    } catch (_) {}
     return { success: true, excelUpdated: csvUpdated || xlsxUpdated };
   }
+
   return { success: false, excelUpdated: false };
 }
 

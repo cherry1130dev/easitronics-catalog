@@ -104,7 +104,22 @@ export default function UploadPage() {
       const res = await fetch(url);
       const data = await res.json();
       if (data.projects) {
-        setExistingProjects(data.projects);
+        let projects: Project[] = data.projects;
+        // Merge client-side localStorage overrides for instant resilience
+        try {
+          const stored = localStorage.getItem('easitronics_project_overrides');
+          if (stored) {
+            const overridesObj = JSON.parse(stored);
+            projects = projects.map((p) => {
+              const override = overridesObj[p.id] || (p.title ? overridesObj[p.title] : null);
+              if (override) {
+                return { ...p, ...override, isEdited: true };
+              }
+              return p;
+            });
+          }
+        } catch (_) {}
+        setExistingProjects(projects);
       }
     } catch (err) {
       console.error('Failed to load existing projects:', err);
@@ -162,6 +177,7 @@ export default function UploadPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingProject.id,
+          originalTitle: editingProject.title,
           title: editFormData.title.trim(),
           branch: editFormData.branch,
           domain: finalDomain,
@@ -182,13 +198,35 @@ export default function UploadPage() {
         throw new Error(data.error || 'Failed to update project');
       }
 
+      const updatedProj: Project = { ...data.project, isEdited: true };
+
+      // 1. Immediately update UI state in table
       setExistingProjects((prev) =>
-        prev.map((p) => (p.id === editingProject.id ? { ...data.project, isEdited: true } : p))
+        prev.map((p) => (p.id === editingProject.id ? updatedProj : p))
       );
 
-      setEditSuccessMsg(
-        `Project "${data.project.title}" successfully updated! Both Excel sheet (.xlsx & .csv) and catalog updated.`
-      );
+      // 2. Persist to localStorage for immediate resilience
+      try {
+        const stored = localStorage.getItem('easitronics_project_overrides');
+        const overridesObj = stored ? JSON.parse(stored) : {};
+        overridesObj[editingProject.id] = updatedProj;
+        if (editingProject.title) overridesObj[editingProject.title] = updatedProj;
+        if (updatedProj.title) overridesObj[updatedProj.title] = updatedProj;
+        localStorage.setItem('easitronics_project_overrides', JSON.stringify(overridesObj));
+      } catch (err) {
+        console.warn('LocalStorage save warning:', err);
+      }
+
+      let successMsg = `Project "${updatedProj.title}" updated successfully!`;
+      if (data.sheetSynced) {
+        successMsg += ' Live Google Sheet automatically updated.';
+      } else if (data.sheetMessage) {
+        successMsg += ` (${data.sheetMessage})`;
+      } else {
+        successMsg += ' Catalog and Excel files updated.';
+      }
+
+      setEditSuccessMsg(successMsg);
       setEditingProject(null);
     } catch (err: any) {
       setEditErrorMsg(err.message || 'Error updating project');
@@ -203,11 +241,28 @@ export default function UploadPage() {
     }
     setResettingId(id);
     try {
-      const res = await fetch(`/api/projects?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(
+        `/api/projects?id=${encodeURIComponent(id)}&title=${encodeURIComponent(title)}`,
+        {
+          method: 'DELETE',
+        }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reset project');
+
+      // Clear from localStorage
+      try {
+        const stored = localStorage.getItem('easitronics_project_overrides');
+        if (stored) {
+          const overridesObj = JSON.parse(stored);
+          delete overridesObj[id];
+          delete overridesObj[id.toLowerCase()];
+          delete overridesObj[title];
+          delete overridesObj[title.toLowerCase().trim()];
+          localStorage.setItem('easitronics_project_overrides', JSON.stringify(overridesObj));
+        }
+      } catch (_) {}
+
       setEditSuccessMsg(data.message || 'Project reset to original values.');
       await loadExistingProjects(true);
     } catch (err: any) {
@@ -1363,24 +1418,57 @@ function doPost(e) {
 {`function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = JSON.parse(e.postData.contents);
-  var rows = Array.isArray(data) ? data : [data];
   
+  // 1. Handle Updating Existing Project Row
+  if (data.action === 'update' && data.project) {
+    var p = data.project;
+    var targetTitle = (data.originalTitle || p.title || '').toString().trim().toLowerCase();
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var titles = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < titles.length; i++) {
+        var rowTitle = (titles[i][0] || '').toString().trim().toLowerCase();
+        if (rowTitle === targetTitle) {
+          var rowIndex = i + 2;
+          sheet.getRange(rowIndex, 1, 1, 10).setValues([[
+            p.title || '',
+            p.domain || '',
+            p.branch || '',
+            p.type || '',
+            p.price || '',
+            p.description || '',
+            p.imageUrl || 'ADD_IMAGE_LINK',
+            p.demoVideoUrl || 'ADD_VIDEO_LINK',
+            Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || ''),
+            p.featured ? 'TRUE' : 'FALSE'
+          ]]);
+          return ContentService.createTextOutput(JSON.stringify({ status: 'success', action: 'updated', row: rowIndex }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+    }
+  }
+
+  // 2. Handle Appending New Project Rows
+  var rows = Array.isArray(data) ? data : (data.projects || [data]);
   rows.forEach(function(p) {
-    sheet.appendRow([
-      p.title || '',
-      p.domain || '',
-      p.branch || '',
-      p.type || '',
-      p.price || '',
-      p.description || '',
-      p.imageUrl || 'ADD_IMAGE_LINK',
-      p.demoVideoUrl || 'ADD_VIDEO_LINK',
-      Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || ''),
-      p.featured ? 'TRUE' : 'FALSE'
-    ]);
+    if (p && p.title) {
+      sheet.appendRow([
+        p.title || '',
+        p.domain || '',
+        p.branch || '',
+        p.type || '',
+        p.price || '',
+        p.description || '',
+        p.imageUrl || 'ADD_IMAGE_LINK',
+        p.demoVideoUrl || 'ADD_VIDEO_LINK',
+        Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || ''),
+        p.featured ? 'TRUE' : 'FALSE'
+      ]);
+    }
   });
   
-  return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+  return ContentService.createTextOutput(JSON.stringify({ status: 'success', action: 'appended' }))
     .setMimeType(ContentService.MimeType.JSON);
 }`}
                     </pre>

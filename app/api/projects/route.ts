@@ -127,8 +127,9 @@ export async function PUT(request: Request) {
       );
     }
 
-    const updatePayload: Partial<Project> & { id: string } = {
+    const updatePayload: Partial<Project> & { id: string; originalTitle?: string } = {
       id: body.id,
+      originalTitle: body.originalTitle?.trim(),
       title: body.title.trim(),
       domain: body.domain?.trim() || 'IoT',
       branch: body.branch?.trim() || 'ECE',
@@ -146,11 +147,20 @@ export async function PUT(request: Request) {
 
     const result = await updateProject(updatePayload);
 
+    let message = `Project "${result.project.title}" updated successfully!`;
+    if (result.sheetSynced) {
+      message += ' Live Google Sheet automatically updated.';
+    } else if (result.excelUpdated) {
+      message += ' Excel file (.xlsx & .csv) updated.';
+    }
+
     return NextResponse.json({
       success: true,
-      message: `Project "${result.project.title}" updated successfully! Excel sheet (.xlsx & .csv) updated.`,
+      message,
       project: result.project,
       excelUpdated: result.excelUpdated,
+      sheetSynced: result.sheetSynced,
+      sheetMessage: result.sheetMessage,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -164,16 +174,17 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const title = searchParams.get('title') || undefined;
 
     if (!id) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
-    const result = await resetProjectOverride(id);
+    const result = await resetProjectOverride(id, title);
     return NextResponse.json({
       success: result.success,
       message: result.success
-        ? 'Project reset to original sheet values & Excel sheet updated.'
+        ? 'Project reset to original sheet values.'
         : 'No customized overrides found for this project.',
       excelUpdated: result.excelUpdated,
     });
