@@ -1,4 +1,5 @@
 import { getProjects } from '@/lib/sheets';
+import { parseBranches, parseDomains } from '@/lib/types';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -65,12 +66,16 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           {/* Top Badges Row */}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-4 border-b border-slate-800">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
-                {project.branch} Engineering
-              </span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                Domain: {project.domain}
-              </span>
+              {parseBranches(project.branch).map((b) => (
+                <span key={b} className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
+                  {b} Engineering
+                </span>
+              ))}
+              {parseDomains(project.domain).map((d) => (
+                <span key={d} className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                  Domain: {d}
+                </span>
+              ))}
               <span
                 className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
                   project.type === 'Product'
@@ -173,7 +178,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
               <div className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                <span className="text-slate-500 block">Department</span>
+                <span className="text-slate-500 block">Department / Branch</span>
                 <strong className="text-white font-semibold">{project.branch}</strong>
               </div>
               <div className="p-3 bg-slate-950 rounded-lg border border-slate-800">

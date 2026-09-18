@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Project, FilterState, ProjectKind } from '@/lib/types';
+import { Project, FilterState, ProjectKind, parseBranches, parseDomains } from '@/lib/types';
 import Hero from '@/components/Hero';
 import FilterPanel from '@/components/FilterPanel';
 import ProjectGrid from '@/components/ProjectGrid';
@@ -61,6 +61,17 @@ function CatalogContent() {
 
       if (data.projects) {
         let projects: Project[] = data.projects;
+        try {
+          const storedDel = localStorage.getItem('easitronics_deleted_projects');
+          if (storedDel) {
+            const delArr: string[] = JSON.parse(storedDel);
+            const delSet = new Set(delArr.map((k) => String(k).toLowerCase().trim()));
+            projects = projects.filter(
+              (p) => !delSet.has(p.id.toLowerCase()) && !delSet.has(p.title.toLowerCase().trim())
+            );
+          }
+        } catch (_) {}
+
         try {
           const stored = localStorage.getItem('easitronics_project_overrides');
           if (stored) {
@@ -175,8 +186,12 @@ function CatalogContent() {
     const tCounts: Record<string, number> = {};
 
     allProjects.forEach((p) => {
-      bCounts[p.branch] = (bCounts[p.branch] || 0) + 1;
-      dCounts[p.domain] = (dCounts[p.domain] || 0) + 1;
+      parseBranches(p.branch).forEach((b) => {
+        bCounts[b] = (bCounts[b] || 0) + 1;
+      });
+      parseDomains(p.domain).forEach((d) => {
+        dCounts[d] = (dCounts[d] || 0) + 1;
+      });
       tCounts[p.type] = (tCounts[p.type] || 0) + 1;
     });
 
@@ -190,11 +205,15 @@ function CatalogContent() {
     // 1. Scope filter (from Amazon search bar dropdown)
     if (filters.searchScope && filters.searchScope !== 'All') {
       if (filters.searchScope.startsWith('branch:')) {
-        const targetBranch = filters.searchScope.replace('branch:', '').trim();
-        result = result.filter((p) => p.branch.toLowerCase() === targetBranch.toLowerCase());
+        const targetBranch = filters.searchScope.replace('branch:', '').trim().toLowerCase();
+        result = result.filter((p) =>
+          parseBranches(p.branch).some((b) => b.toLowerCase() === targetBranch)
+        );
       } else if (filters.searchScope.startsWith('domain:')) {
-        const targetDomain = filters.searchScope.replace('domain:', '').trim();
-        result = result.filter((p) => p.domain.toLowerCase() === targetDomain.toLowerCase());
+        const targetDomain = filters.searchScope.replace('domain:', '').trim().toLowerCase();
+        result = result.filter((p) =>
+          parseDomains(p.domain).some((d) => d.toLowerCase() === targetDomain)
+        );
       }
     }
 
@@ -212,14 +231,20 @@ function CatalogContent() {
       });
     }
 
-    // 3. Branch Multi-Select Filter
+    // 3. Branch Multi-Select Filter (Matches if any of project's branches are selected)
     if (filters.branches.length > 0) {
-      result = result.filter((p) => filters.branches.includes(p.branch));
+      result = result.filter((p) => {
+        const pBranches = parseBranches(p.branch).map((b) => b.toLowerCase());
+        return filters.branches.some((fb) => pBranches.includes(fb.toLowerCase()));
+      });
     }
 
-    // 4. Domain Multi-Select Filter
+    // 4. Domain Multi-Select Filter (Matches if any of project's domains are selected)
     if (filters.domains.length > 0) {
-      result = result.filter((p) => filters.domains.includes(p.domain));
+      result = result.filter((p) => {
+        const pDomains = parseDomains(p.domain).map((d) => d.toLowerCase());
+        return filters.domains.some((fd) => pDomains.includes(fd.toLowerCase()));
+      });
     }
 
     // 5. Project Type Filter

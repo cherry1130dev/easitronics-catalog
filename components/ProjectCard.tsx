@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Project } from '@/lib/types';
+import { Project, parseBranches, parseDomains } from '@/lib/types';
 import { IndianRupee, ArrowRight, Sparkles, Copy, Check } from 'lucide-react';
 import { formatProjectDetailsForCopy } from '@/lib/copyUtils';
 import HighlightText from './HighlightText';
@@ -25,11 +25,6 @@ const DOMAIN_COLOR_MAP: Record<string, { badge: string; border: string }> = {
 export default function ProjectCard({ project, searchQuery = '', index }: ProjectCardProps) {
   const [copied, setCopied] = useState(false);
 
-  const domainStyle = DOMAIN_COLOR_MAP[project.domain] || {
-    badge: 'bg-slate-800 text-slate-300 border-slate-700',
-    border: 'border-slate-800',
-  };
-
   const handleCopyTitle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -50,15 +45,24 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
               </span>
             )}
 
-            {/* Domain Badge */}
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${domainStyle.badge}`}>
-              {project.domain}
-            </span>
+            {/* Domain Badges */}
+            {parseDomains(project.domain).map((dom) => {
+              const domainStyle = DOMAIN_COLOR_MAP[dom] || {
+                badge: 'bg-cyan-950/70 text-cyan-300 border-cyan-800/60',
+              };
+              return (
+                <span key={dom} className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${domainStyle.badge}`}>
+                  {dom}
+                </span>
+              );
+            })}
 
-            {/* Branch Badge */}
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-              {project.branch}
-            </span>
+            {/* Branch Badges */}
+            {parseBranches(project.branch).map((br) => (
+              <span key={br} className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                {br}
+              </span>
+            ))}
 
             {/* Project Type Badge */}
             <span

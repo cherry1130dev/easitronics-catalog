@@ -21,13 +21,14 @@ import {
   Pencil,
   Search,
   RotateCcw,
+  Trash2,
   X,
   IndianRupee,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
 import { GOOGLE_SHEET_VIEW_URL } from '@/lib/constants';
-import { Project, ProjectKind } from '@/lib/types';
+import { Project, ProjectKind, parseBranches, parseDomains } from '@/lib/types';
 
 const BRANCH_OPTIONS = ['ECE', 'CSE', 'EEE', 'Mechanical', 'Civil', 'Medical', 'Other'];
 const DOMAIN_OPTIONS = ['IoT', 'Embedded', 'Robotics', 'Machine Learning', 'Simulation', 'Large AI', 'Other'];
@@ -39,8 +40,10 @@ export default function UploadPage() {
   // Single Project Form State
   const [formData, setFormData] = useState({
     title: '',
-    branch: 'ECE',
-    domain: 'IoT',
+    branches: ['ECE'] as string[],
+    customBranch: '',
+    domains: ['IoT'] as string[],
+    customDomain: '',
     type: 'Prototype',
     price: '15000',
     description: '',
@@ -81,8 +84,9 @@ export default function UploadPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editFormData, setEditFormData] = useState({
     title: '',
-    branch: 'ECE',
-    domain: 'IoT',
+    branches: ['ECE'] as string[],
+    customBranch: '',
+    domains: ['IoT'] as string[],
     customDomain: '',
     type: 'Prototype' as ProjectKind,
     price: '15000',
@@ -95,6 +99,7 @@ export default function UploadPage() {
   const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
   const [editErrorMsg, setEditErrorMsg] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Fetch all existing catalog projects for editing
   const loadExistingProjects = async (force = false) => {
@@ -105,6 +110,18 @@ export default function UploadPage() {
       const data = await res.json();
       if (data.projects) {
         let projects: Project[] = data.projects;
+        // Filter out client-side deleted projects
+        try {
+          const storedDel = localStorage.getItem('easitronics_deleted_projects');
+          if (storedDel) {
+            const delArr: string[] = JSON.parse(storedDel);
+            const delSet = new Set(delArr.map((k) => String(k).toLowerCase().trim()));
+            projects = projects.filter(
+              (p) => !delSet.has(p.id.toLowerCase()) && !delSet.has(p.title.toLowerCase().trim())
+            );
+          }
+        } catch (_) {}
+
         // Merge client-side localStorage overrides for instant resilience
         try {
           const stored = localStorage.getItem('easitronics_project_overrides');
@@ -138,12 +155,45 @@ export default function UploadPage() {
     setEditingProject(project);
     setEditSuccessMsg(null);
     setEditErrorMsg(null);
-    const isPredefinedDomain = DOMAIN_OPTIONS.includes(project.domain);
+
+    // Parse existing branches into selected options
+    const parsedB = parseBranches(project.branch);
+    const standardB = BRANCH_OPTIONS.filter((b) => b !== 'Other');
+    const selectedB: string[] = [];
+    let customB = '';
+    parsedB.forEach((b) => {
+      const match = standardB.find((sb) => sb.toLowerCase() === b.toLowerCase());
+      if (match) {
+        selectedB.push(match);
+      } else {
+        selectedB.push('Other');
+        customB = b;
+      }
+    });
+    if (selectedB.length === 0) selectedB.push('ECE');
+
+    // Parse existing domains into selected options
+    const parsedD = parseDomains(project.domain);
+    const standardD = DOMAIN_OPTIONS.filter((d) => d !== 'Other');
+    const selectedD: string[] = [];
+    let customD = '';
+    parsedD.forEach((d) => {
+      const match = standardD.find((sd) => sd.toLowerCase() === d.toLowerCase());
+      if (match) {
+        selectedD.push(match);
+      } else {
+        selectedD.push('Other');
+        customD = d;
+      }
+    });
+    if (selectedD.length === 0) selectedD.push('IoT');
+
     setEditFormData({
       title: project.title,
-      branch: project.branch,
-      domain: isPredefinedDomain ? project.domain : 'Other',
-      customDomain: isPredefinedDomain ? '' : project.domain,
+      branches: Array.from(new Set(selectedB)),
+      customBranch: customB,
+      domains: Array.from(new Set(selectedD)),
+      customDomain: customD,
       type: project.type,
       price: String(project.price),
       description: project.description,
@@ -162,14 +212,23 @@ export default function UploadPage() {
       return;
     }
 
+    // Assemble branches
+    const activeBranches = editFormData.branches.filter((b) => b !== 'Other');
+    if (editFormData.branches.includes('Other') && editFormData.customBranch.trim()) {
+      activeBranches.push(editFormData.customBranch.trim());
+    }
+    const finalBranches = activeBranches.length > 0 ? activeBranches.join(', ') : 'ECE';
+
+    // Assemble domains
+    const activeDomains = editFormData.domains.filter((d) => d !== 'Other');
+    if (editFormData.domains.includes('Other') && editFormData.customDomain.trim()) {
+      activeDomains.push(editFormData.customDomain.trim());
+    }
+    const finalDomains = activeDomains.length > 0 ? activeDomains.join(', ') : 'IoT';
+
     setEditSaving(true);
     setEditSuccessMsg(null);
     setEditErrorMsg(null);
-
-    const finalDomain =
-      editFormData.domain === 'Other' && editFormData.customDomain.trim()
-        ? editFormData.customDomain.trim()
-        : editFormData.domain;
 
     try {
       const res = await fetch('/api/projects', {
@@ -179,8 +238,8 @@ export default function UploadPage() {
           id: editingProject.id,
           originalTitle: editingProject.title,
           title: editFormData.title.trim(),
-          branch: editFormData.branch,
-          domain: finalDomain,
+          branch: finalBranches,
+          domain: finalDomains,
           type: editFormData.type,
           price: parseInt(editFormData.price.replace(/[^0-9]/g, ''), 10) || 10000,
           description: editFormData.description.trim(),
@@ -219,11 +278,9 @@ export default function UploadPage() {
 
       let successMsg = `Project "${updatedProj.title}" updated successfully!`;
       if (data.sheetSynced) {
-        successMsg += ' Live Google Sheet automatically updated.';
-      } else if (data.sheetMessage) {
-        successMsg += ` (${data.sheetMessage})`;
+        successMsg += ' ✨ Live Google Sheet automatically updated.';
       } else {
-        successMsg += ' Catalog and Excel files updated.';
+        successMsg += ' Saved to catalog & Excel files (.xlsx & .csv).';
       }
 
       setEditSuccessMsg(successMsg);
@@ -242,7 +299,7 @@ export default function UploadPage() {
     setResettingId(id);
     try {
       const res = await fetch(
-        `/api/projects?id=${encodeURIComponent(id)}&title=${encodeURIComponent(title)}`,
+        `/api/projects?id=${encodeURIComponent(id)}&title=${encodeURIComponent(title)}&action=reset`,
         {
           method: 'DELETE',
         }
@@ -272,10 +329,70 @@ export default function UploadPage() {
     }
   };
 
+  const handleDeleteProject = async (id: string, title: string) => {
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete "${title}" from the catalog?\n\nThis will remove the project from the catalog website and update your Excel & CSV files.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(id);
+    setEditSuccessMsg(null);
+    setEditErrorMsg(null);
+    try {
+      const res = await fetch(
+        `/api/projects?id=${encodeURIComponent(id)}&title=${encodeURIComponent(title)}&action=delete`,
+        {
+          method: 'DELETE',
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete project');
+
+      // 1. Remove from local existingProjects list immediately
+      setExistingProjects((prev) => prev.filter((p) => p.id !== id && p.title !== title));
+
+      // 2. Clear from localStorage overrides & record in deleted list
+      try {
+        const stored = localStorage.getItem('easitronics_project_overrides');
+        if (stored) {
+          const overridesObj = JSON.parse(stored);
+          delete overridesObj[id];
+          delete overridesObj[id.toLowerCase()];
+          delete overridesObj[title];
+          delete overridesObj[title.toLowerCase().trim()];
+          localStorage.setItem('easitronics_project_overrides', JSON.stringify(overridesObj));
+        }
+        const storedDel = localStorage.getItem('easitronics_deleted_projects');
+        const delArr = storedDel ? JSON.parse(storedDel) : [];
+        delArr.push(id.toLowerCase(), title.toLowerCase().trim());
+        localStorage.setItem('easitronics_deleted_projects', JSON.stringify(delArr));
+      } catch (_) {}
+
+      // Close modal if open
+      if (editingProject && editingProject.id === id) {
+        setEditingProject(null);
+      }
+
+      setEditSuccessMsg(data.message || `Project "${title}" was permanently deleted.`);
+    } catch (err: any) {
+      setEditErrorMsg(err.message || 'Failed to delete project');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const filteredExisting = useMemo(() => {
     return existingProjects.filter((p) => {
-      if (editDomainFilter !== 'All' && p.domain.toLowerCase() !== editDomainFilter.toLowerCase()) return false;
-      if (editBranchFilter !== 'All' && p.branch.toLowerCase() !== editBranchFilter.toLowerCase()) return false;
+      if (editDomainFilter !== 'All') {
+        const pDomains = parseDomains(p.domain).map((d) => d.toLowerCase());
+        if (!pDomains.includes(editDomainFilter.toLowerCase())) return false;
+      }
+      if (editBranchFilter !== 'All') {
+        const pBranches = parseBranches(p.branch).map((b) => b.toLowerCase());
+        if (!pBranches.includes(editBranchFilter.toLowerCase())) return false;
+      }
       if (editSearch.trim()) {
         const q = editSearch.toLowerCase().trim();
         return (
@@ -322,14 +439,26 @@ export default function UploadPage() {
       return;
     }
 
+    const activeBranches = formData.branches.filter((b) => b !== 'Other');
+    if (formData.branches.includes('Other') && formData.customBranch.trim()) {
+      activeBranches.push(formData.customBranch.trim());
+    }
+    const finalBranches = activeBranches.length > 0 ? activeBranches.join(', ') : 'ECE';
+
+    const activeDomains = formData.domains.filter((d) => d !== 'Other');
+    if (formData.domains.includes('Other') && formData.customDomain.trim()) {
+      activeDomains.push(formData.customDomain.trim());
+    }
+    const finalDomains = activeDomains.length > 0 ? activeDomains.join(', ') : 'IoT';
+
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: formData.title.trim(),
-          branch: formData.branch,
-          domain: formData.domain,
+          branch: finalBranches,
+          domain: finalDomains,
           type: formData.type,
           price: parseInt(formData.price.replace(/[^0-9]/g, ''), 10) || 10000,
           description: formData.description.trim(),
@@ -356,8 +485,10 @@ export default function UploadPage() {
       // Reset form
       setFormData({
         title: '',
-        branch: 'ECE',
-        domain: 'IoT',
+        branches: ['ECE'],
+        customBranch: '',
+        domains: ['IoT'],
+        customDomain: '',
         type: 'Prototype',
         price: '15000',
         description: '',
@@ -670,40 +801,120 @@ function doPost(e) {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Branch Multi-Select & Domain Multi-Select */}
+              <div className="space-y-4">
+                {/* Branch Multi-Select */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Engineering Branch
-                  </label>
-                  <select
-                    value={formData.branch}
-                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm outline-none cursor-pointer focus:border-amber-400"
-                  >
-                    {BRANCH_OPTIONS.map((b) => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Engineering Branch(es) *
+                    </label>
+                    <span className="text-[11px] text-amber-400 font-semibold">
+                      {formData.branches.length} selected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-2">
+                    Select one or multiple branches (e.g. ECE, EEE, Mechanical for interdisciplinary projects)
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-950 border border-slate-700 rounded-xl">
+                    {BRANCH_OPTIONS.map((b) => {
+                      const isSelected = formData.branches.includes(b);
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => {
+                              const exists = prev.branches.includes(b);
+                              if (exists) {
+                                const next = prev.branches.filter((x) => x !== b);
+                                return { ...prev, branches: next.length > 0 ? next : [b] };
+                              } else {
+                                return { ...prev, branches: [...prev.branches, b] };
+                              }
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 active:scale-95 ${
+                            isSelected
+                              ? 'bg-amber-400 text-slate-950 shadow-sm'
+                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-600'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-slate-950 stroke-[3]" />}
+                          <span>{b}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {formData.branches.includes('Other') && (
+                    <input
+                      type="text"
+                      value={formData.customBranch}
+                      onChange={(e) => setFormData({ ...formData, customBranch: e.target.value })}
+                      placeholder="Enter custom branch (e.g. Chemical, Aeronautical)..."
+                      className="mt-2 w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:border-amber-400 outline-none"
+                    />
+                  )}
                 </div>
 
+                {/* Domain Multi-Select */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Technology Domain
-                  </label>
-                  <select
-                    value={formData.domain}
-                    onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm outline-none cursor-pointer focus:border-amber-400"
-                  >
-                    {DOMAIN_OPTIONS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Technology Domain(s) *
+                    </label>
+                    <span className="text-[11px] text-amber-400 font-semibold">
+                      {formData.domains.length} selected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-2">
+                    Select one or multiple domains (e.g. IoT, Embedded, Robotics)
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-950 border border-slate-700 rounded-xl">
+                    {DOMAIN_OPTIONS.map((d) => {
+                      const isSelected = formData.domains.includes(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => {
+                              const exists = prev.domains.includes(d);
+                              if (exists) {
+                                const next = prev.domains.filter((x) => x !== d);
+                                return { ...prev, domains: next.length > 0 ? next : [d] };
+                              } else {
+                                return { ...prev, domains: [...prev.domains, d] };
+                              }
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 active:scale-95 ${
+                            isSelected
+                              ? 'bg-amber-400 text-slate-950 shadow-sm'
+                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-600'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-slate-950 stroke-[3]" />}
+                          <span>{d}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {formData.domains.includes('Other') && (
+                    <input
+                      type="text"
+                      value={formData.customDomain}
+                      onChange={(e) => setFormData({ ...formData, customDomain: e.target.value })}
+                      placeholder="Enter custom domain (e.g. Blockchain, Biomedical Signals)..."
+                      className="mt-2 w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:border-amber-400 outline-none"
+                    />
+                  )}
                 </div>
 
+                {/* Project Type */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Project Type
+                    Project Delivery Type
                   </label>
                   <select
                     value={formData.type}
@@ -1102,15 +1313,29 @@ function doPost(e) {
                                 {project.description}
                               </div>
                             </td>
-                            <td className="px-3.5 py-3 whitespace-nowrap">
-                              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-medium">
-                                {project.branch}
-                              </span>
+                            <td className="px-3.5 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {parseBranches(project.branch).map((b) => (
+                                  <span
+                                    key={b}
+                                    className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-medium"
+                                  >
+                                    {b}
+                                  </span>
+                                ))}
+                              </div>
                             </td>
-                            <td className="px-3.5 py-3 whitespace-nowrap">
-                              <span className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60 text-[10px] font-semibold">
-                                {project.domain}
-                              </span>
+                            <td className="px-3.5 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {parseDomains(project.domain).map((d) => (
+                                  <span
+                                    key={d}
+                                    className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60 text-[10px] font-semibold"
+                                  >
+                                    {d}
+                                  </span>
+                                ))}
+                              </div>
                             </td>
                             <td className="px-3.5 py-3 whitespace-nowrap">
                               <span
@@ -1156,12 +1381,22 @@ function doPost(e) {
                                   <span>Edit</span>
                                 </button>
 
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteProject(project.id, project.title)}
+                                  disabled={deletingId === project.id}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-950/60 border border-transparent hover:border-rose-900/60 transition-all"
+                                  title="Permanently delete project from catalog"
+                                >
+                                  <Trash2 className={`w-3.5 h-3.5 ${deletingId === project.id ? 'animate-spin text-rose-400' : ''}`} />
+                                </button>
+
                                 {project.isEdited && (
                                   <button
                                     type="button"
                                     onClick={() => handleResetProject(project.id, project.title)}
                                     disabled={resettingId === project.id}
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-slate-800 border border-transparent hover:border-rose-900 transition-all"
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-slate-800 border border-transparent hover:border-amber-900 transition-all"
                                     title="Reset back to original sheet values"
                                   >
                                     <RotateCcw className={`w-3.5 h-3.5 ${resettingId === project.id ? 'animate-spin' : ''}`} />
@@ -1555,42 +1790,117 @@ function doPost(e) {
                 />
               </div>
 
-              {/* Branch, Domain, Type */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              {/* Branch Multi-Select & Domain Multi-Select */}
+              <div className="space-y-4">
+                {/* Branch Multi-Select */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Engineering Branch
-                  </label>
-                  <select
-                    value={editFormData.branch}
-                    onChange={(e) => setEditFormData({ ...editFormData, branch: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs outline-none cursor-pointer focus:border-amber-400"
-                  >
-                    {BRANCH_OPTIONS.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Engineering Branch(es) *
+                    </label>
+                    <span className="text-[11px] text-amber-400 font-semibold">
+                      {editFormData.branches.length} selected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-2">
+                    Select one or multiple branches (e.g. ECE, EEE, Mechanical for interdisciplinary projects)
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-950 border border-slate-700 rounded-xl">
+                    {BRANCH_OPTIONS.map((b) => {
+                      const isSelected = editFormData.branches.includes(b);
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => {
+                            setEditFormData((prev) => {
+                              const exists = prev.branches.includes(b);
+                              if (exists) {
+                                const next = prev.branches.filter((x) => x !== b);
+                                return { ...prev, branches: next.length > 0 ? next : [b] };
+                              } else {
+                                return { ...prev, branches: [...prev.branches, b] };
+                              }
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 active:scale-95 ${
+                            isSelected
+                              ? 'bg-amber-400 text-slate-950 shadow-sm'
+                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-600'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-slate-950 stroke-[3]" />}
+                          <span>{b}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {editFormData.branches.includes('Other') && (
+                    <input
+                      type="text"
+                      value={editFormData.customBranch}
+                      onChange={(e) => setEditFormData({ ...editFormData, customBranch: e.target.value })}
+                      placeholder="Enter custom branch (e.g. Chemical, Aeronautical)..."
+                      className="mt-2 w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:border-amber-400 outline-none"
+                    />
+                  )}
                 </div>
 
+                {/* Domain Multi-Select */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Technology Domain
-                  </label>
-                  <select
-                    value={editFormData.domain}
-                    onChange={(e) => setEditFormData({ ...editFormData, domain: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs outline-none cursor-pointer focus:border-amber-400"
-                  >
-                    {DOMAIN_OPTIONS.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Technology Domain(s) *
+                    </label>
+                    <span className="text-[11px] text-amber-400 font-semibold">
+                      {editFormData.domains.length} selected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-2">
+                    Select one or multiple domains (e.g. IoT, Embedded, Robotics)
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-950 border border-slate-700 rounded-xl">
+                    {DOMAIN_OPTIONS.map((d) => {
+                      const isSelected = editFormData.domains.includes(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setEditFormData((prev) => {
+                              const exists = prev.domains.includes(d);
+                              if (exists) {
+                                const next = prev.domains.filter((x) => x !== d);
+                                return { ...prev, domains: next.length > 0 ? next : [d] };
+                              } else {
+                                return { ...prev, domains: [...prev.domains, d] };
+                              }
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 active:scale-95 ${
+                            isSelected
+                              ? 'bg-amber-400 text-slate-950 shadow-sm'
+                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-600'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-slate-950 stroke-[3]" />}
+                          <span>{d}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {editFormData.domains.includes('Other') && (
+                    <input
+                      type="text"
+                      value={editFormData.customDomain}
+                      onChange={(e) => setEditFormData({ ...editFormData, customDomain: e.target.value })}
+                      placeholder="Enter custom domain (e.g. Blockchain, Biomedical Signals)..."
+                      className="mt-2 w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:border-amber-400 outline-none"
+                    />
+                  )}
                 </div>
 
+                {/* Project Type */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                     Project Type
@@ -1605,22 +1915,6 @@ function doPost(e) {
                   </select>
                 </div>
               </div>
-
-              {/* Custom domain if Other */}
-              {editFormData.domain === 'Other' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Custom Technology Domain Name
-                  </label>
-                  <input
-                    type="text"
-                    value={editFormData.customDomain}
-                    onChange={(e) => setEditFormData({ ...editFormData, customDomain: e.target.value })}
-                    placeholder="e.g. Biomedical Signals, Blockchain, etc."
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:border-amber-400 outline-none"
-                  />
-                </div>
-              )}
 
               {/* Price & Tags */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -1701,24 +1995,38 @@ function doPost(e) {
               </div>
 
               {/* Modal Footer Controls */}
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+                {/* Delete Project Option (Requested by user) */}
                 <button
                   type="button"
-                  onClick={() => !editSaving && setEditingProject(null)}
-                  disabled={editSaving}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-colors disabled:opacity-50"
+                  onClick={() => handleDeleteProject(editingProject.id, editingProject.title)}
+                  disabled={editSaving || deletingId === editingProject.id}
+                  className="px-3.5 py-2.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/80 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                  title="Permanently remove project from catalog & Excel files"
                 >
-                  Cancel
+                  <Trash2 className={`w-3.5 h-3.5 text-rose-400 ${deletingId === editingProject.id ? 'animate-spin' : ''}`} />
+                  <span>{deletingId === editingProject.id ? 'Deleting Project...' : 'Delete Project'}</span>
                 </button>
 
-                <button
-                  type="submit"
-                  disabled={editSaving}
-                  className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${editSaving ? 'animate-spin' : 'hidden'}`} />
-                  <span>{editSaving ? 'Saving Changes...' : 'Save Changes & Update Excel'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => !editSaving && setEditingProject(null)}
+                    disabled={editSaving || deletingId === editingProject.id}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={editSaving || deletingId === editingProject.id}
+                    className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${editSaving ? 'animate-spin' : 'hidden'}`} />
+                    <span>{editSaving ? 'Saving Changes...' : 'Save Changes & Update Excel'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

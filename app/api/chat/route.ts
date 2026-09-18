@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProjects } from '@/lib/sheets';
+import { parseBranches, parseDomains } from '@/lib/types';
 import { EASITRONICS } from '@/lib/constants';
 
 interface ChatMessage {
@@ -110,8 +111,8 @@ CONCISENESS & READABILITY RULES (CRITICAL):
     // Search matching projects by keywords
     const matched = projects.filter((p) => {
       return (
-        qLower.includes(p.branch.toLowerCase()) ||
-        qLower.includes(p.domain.toLowerCase()) ||
+        parseBranches(p.branch).some((b) => qLower.includes(b.toLowerCase())) ||
+        parseDomains(p.domain).some((d) => qLower.includes(d.toLowerCase())) ||
         p.tags.some(t => qLower.includes(t.toLowerCase())) ||
         p.title.toLowerCase().split(' ').some(w => w.length > 3 && qLower.includes(w))
       );

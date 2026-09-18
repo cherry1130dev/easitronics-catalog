@@ -20,6 +20,9 @@ const TMP_OVERRIDES_FILE = path.join(TMP_DATA_DIR, 'project-overrides.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const TMP_SETTINGS_FILE = path.join(TMP_DATA_DIR, 'settings.json');
 
+const DELETED_PROJECTS_FILE = path.join(DATA_DIR, 'deleted-projects.json');
+const TMP_DELETED_PROJECTS_FILE = path.join(TMP_DATA_DIR, 'deleted-projects.json');
+
 const EXCEL_FILE_PATH = path.join(process.cwd(), 'project_catalog_data.xlsx');
 const CSV_FILE_PATH = path.join(process.cwd(), 'project_catalog_data.csv');
 
@@ -40,6 +43,7 @@ const CACHE_TTL_MS = 60 * 1000; // 1 minute TTL, easily refreshed on demand
 let memoryOverrides: Record<string, Partial<Project>> = {};
 let memoryCustomProjects: Project[] | null = null;
 let memorySettings: Record<string, any> = {};
+let memoryDeletedProjects: Set<string> = new Set();
 
 /**
  * Robust RFC-compliant CSV parser
@@ -153,6 +157,58 @@ export function saveProjectOverrides(overrides: Record<string, Partial<Project>>
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(OVERRIDES_FILE, JSON.stringify(overrides, null, 2), 'utf-8');
+  } catch (_) {}
+}
+
+/**
+ * Get set of deleted project keys (IDs and Titles)
+ */
+export function getDeletedProjectKeys(): Set<string> {
+  const result = new Set<string>(memoryDeletedProjects);
+
+  try {
+    if (fs.existsSync(DELETED_PROJECTS_FILE)) {
+      const raw = fs.readFileSync(DELETED_PROJECTS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((k: string) => result.add(String(k).toLowerCase().trim()));
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (fs.existsSync(TMP_DELETED_PROJECTS_FILE)) {
+      const raw = fs.readFileSync(TMP_DELETED_PROJECTS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((k: string) => result.add(String(k).toLowerCase().trim()));
+      }
+    }
+  } catch (_) {}
+
+  memoryDeletedProjects = result;
+  return result;
+}
+
+/**
+ * Persist set of deleted project keys
+ */
+export function saveDeletedProjectKeys(deletedKeys: Set<string>): void {
+  memoryDeletedProjects = new Set(deletedKeys);
+  const arr = Array.from(deletedKeys);
+
+  try {
+    if (!fs.existsSync(TMP_DATA_DIR)) {
+      fs.mkdirSync(TMP_DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(TMP_DELETED_PROJECTS_FILE, JSON.stringify(arr, null, 2), 'utf-8');
+  } catch (_) {}
+
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DELETED_PROJECTS_FILE, JSON.stringify(arr, null, 2), 'utf-8');
   } catch (_) {}
 }
 
@@ -382,12 +438,22 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
     }
   }
 
+  // Filter out deleted projects
+  const deletedKeys = getDeletedProjectKeys();
+  const isDeleted = (p: { id?: string; title?: string }) => {
+    const idKey = (p.id || '').toLowerCase().trim();
+    const titleKey = (p.title || '').toLowerCase().trim();
+    return (idKey && deletedKeys.has(idKey)) || (titleKey && deletedKeys.has(titleKey));
+  };
+
+  sheetProjects = sheetProjects.filter((sp) => !isDeleted(sp));
+
   // Deduplicate: If a custom project has the same title as a sheet project, avoid duplicate entries.
   const sheetTitleMap = new Set<string>();
   sheetProjects.forEach((sp) => sheetTitleMap.add(sp.title.toLowerCase().trim()));
 
   const uniqueCustom = rawCustomProjects.filter(
-    (cp) => !sheetTitleMap.has(cp.title.toLowerCase().trim())
+    (cp) => !sheetTitleMap.has(cp.title.toLowerCase().trim()) && !isDeleted(cp)
   );
 
   // Format custom projects with overrides and chronological orderIndex
@@ -876,5 +942,87 @@ export async function resetProjectOverride(
   }
 
   return { success: false, excelUpdated: false };
+}
+
+/**
+ * Permanently delete a project from catalog and update Excel/CSV files
+ */
+export async function deleteProject(
+  id: string,
+  title?: string
+): Promise<{ success: boolean; excelUpdated: boolean; message?: string }> {
+  const normalizedId = id.trim().toLowerCase();
+  const normalizedTitle = title ? title.trim().toLowerCase() : '';
+
+  // 1. Add to persistent deleted keys
+  const deletedKeys = getDeletedProjectKeys();
+  if (normalizedId) deletedKeys.add(normalizedId);
+  if (normalizedTitle) deletedKeys.add(normalizedTitle);
+  saveDeletedProjectKeys(deletedKeys);
+
+  // 2. Remove from custom projects if present
+  try {
+    const customProjects = getCustomProjects();
+    const filteredCustom = customProjects.filter((p) => {
+      const pId = p.id.toLowerCase().trim();
+      const pTitle = p.title.toLowerCase().trim();
+      if (pId === normalizedId) return false;
+      if (normalizedTitle && pTitle === normalizedTitle) return false;
+      return true;
+    });
+    if (filteredCustom.length !== customProjects.length) {
+      saveCustomProjects(filteredCustom);
+    }
+  } catch (_) {}
+
+  // 3. Remove from overrides
+  try {
+    const overrides = getProjectOverrides();
+    let overrideChanged = false;
+    for (const key of Object.keys(overrides)) {
+      const k = key.toLowerCase().trim();
+      if (k === normalizedId || (normalizedTitle && k === normalizedTitle)) {
+        delete overrides[key];
+        delete memoryOverrides[key];
+        overrideChanged = true;
+      }
+    }
+    if (overrideChanged) {
+      saveProjectOverrides(overrides);
+    }
+  } catch (_) {}
+
+  // 4. Invalidate in-memory cache
+  cachedResult = null;
+
+  // 5. Sync updated catalog to project_catalog_data.xlsx and .csv
+  let csvUpdated = false;
+  let xlsxUpdated = false;
+  try {
+    const remaining = await getProjects(true);
+    const syncRes = syncToExcelFiles(remaining.projects);
+    csvUpdated = syncRes.csvUpdated;
+    xlsxUpdated = syncRes.xlsxUpdated;
+  } catch (err) {
+    console.warn('Excel sync on delete error:', err);
+  }
+
+  // 6. Push delete notice to Google Sheet webhook if configured
+  try {
+    const webhookUrl = getGoogleSheetWebhookUrl();
+    if (webhookUrl) {
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id, title }),
+      }).catch(() => {});
+    }
+  } catch (_) {}
+
+  return {
+    success: true,
+    excelUpdated: csvUpdated || xlsxUpdated,
+    message: `Project permanently deleted from catalog & Excel files updated.`,
+  };
 }
 

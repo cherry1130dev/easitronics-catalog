@@ -45,3 +45,29 @@ export interface FilterState {
   maxPrice: number;
   priceBracket?: string; // 'under-10k' | '10k-20k' | '20k-30k' | 'above-30k' | 'all'
 }
+
+/**
+ * Safely parse branches string (e.g. "ECE, EEE, Mechanical" or "ECE") into an array of clean branch names
+ */
+export function parseBranches(branchStr?: string | string[]): string[] {
+  if (!branchStr) return ['ECE'];
+  if (Array.isArray(branchStr)) {
+    const list = branchStr.map((b) => String(b).trim()).filter(Boolean);
+    return list.length > 0 ? list : ['ECE'];
+  }
+  const parts = branchStr.split(/[,/|]+/).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : ['ECE'];
+}
+
+/**
+ * Safely parse domains string (e.g. "IoT, Embedded" or "IoT") into an array of clean domain names
+ */
+export function parseDomains(domainStr?: string | string[]): string[] {
+  if (!domainStr) return ['IoT'];
+  if (Array.isArray(domainStr)) {
+    const list = domainStr.map((d) => String(d).trim()).filter(Boolean);
+    return list.length > 0 ? list : ['IoT'];
+  }
+  const parts = domainStr.split(/[,/|]+/).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : ['IoT'];
+}

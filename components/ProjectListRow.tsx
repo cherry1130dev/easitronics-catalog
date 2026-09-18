@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Project } from '@/lib/types';
+import { Project, parseBranches, parseDomains } from '@/lib/types';
 import { IndianRupee, ArrowRight, Copy, Check, Sparkles } from 'lucide-react';
 import { formatProjectDetailsForCopy } from '@/lib/copyUtils';
 import HighlightText from './HighlightText';
@@ -32,13 +32,17 @@ export default function ProjectListRow({ project, index, searchQuery = '' }: Pro
             #{String(index + 1).padStart(2, '0')}
           </span>
 
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
-            {project.branch}
-          </span>
+          {parseBranches(project.branch).map((b) => (
+            <span key={b} className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
+              {b}
+            </span>
+          ))}
 
-          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-950 text-slate-300 border border-slate-800">
-            {project.domain}
-          </span>
+          {parseDomains(project.domain).map((d) => (
+            <span key={d} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60">
+              {d}
+            </span>
+          ))}
 
           <span
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${

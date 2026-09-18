@@ -10,7 +10,7 @@ export function formatProjectDetailsForCopy(project: Project): string {
     `⚡ EASITRONICS PROJECT SPECIFICATION & QUOTATION`,
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     `📌 Project Title: ${project.title}`,
-    `🎓 Branch: ${project.branch} Engineering`,
+    `🎓 Department / Branch: ${project.branch}`,
     `🔬 Tech Domain: ${project.domain}`,
     `📦 Project Type: ${project.type}`,
     `💰 Estimated Cost: ₹${project.price.toLocaleString('en-IN')}`,
