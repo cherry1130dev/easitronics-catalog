@@ -85,6 +85,21 @@ function CatalogContent() {
             });
           }
         } catch (_) {}
+
+        // Merge client-side localStorage custom projects
+        try {
+          const storedCustom = localStorage.getItem('easitronics_custom_projects');
+          if (storedCustom) {
+            const customArr: Project[] = JSON.parse(storedCustom);
+            const existingIds = new Set(projects.map((p) => p.id));
+            const existingTitles = new Set(projects.map((p) => p.title.toLowerCase().trim()));
+            const missingCustom = customArr.filter(
+              (cp) => !existingIds.has(cp.id) && !existingTitles.has(cp.title.toLowerCase().trim())
+            );
+            projects = [...missingCustom, ...projects];
+          }
+        } catch (_) {}
+
         setAllProjects(projects);
         setIsFallback(Boolean(data.isFallback));
       }

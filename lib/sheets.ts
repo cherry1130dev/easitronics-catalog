@@ -28,6 +28,7 @@ const CSV_FILE_PATH = path.join(process.cwd(), 'project_catalog_data.csv');
 
 interface FetchProjectsResult {
   projects: Project[];
+  chronologicalProjects: Project[];
   isFallback: boolean;
   error?: string;
   lastUpdated: string;
@@ -471,6 +472,10 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
     };
   });
 
+  // Natural chronological order for Excel/CSV storage:
+  // Original sheet rows in order (with any edits applied) + new custom projects appended at the BOTTOM
+  const chronologicalProjects = [...sheetProjects, ...customProjects];
+
   // Combine with first preference given to recently added titles (from last in Excel sheet + custom)
   // Reversing sheetProjects places the highest index (the bottom rows of Excel sheet) at the top
   const reversedSheetProjects = [...sheetProjects].reverse();
@@ -478,6 +483,7 @@ export async function getProjects(forceRefresh = false): Promise<FetchProjectsRe
 
   const result: FetchProjectsResult = {
     projects: allProjects,
+    chronologicalProjects,
     isFallback,
     error: errorMessage,
     lastUpdated: new Date().toISOString(),
@@ -751,7 +757,7 @@ export async function addProject(newProject: Omit<Project, 'id' | 'source'>): Pr
   let xlsxUpdated = false;
   try {
     const fullData = await getProjects(true);
-    const syncRes = syncToExcelFiles(fullData.projects);
+    const syncRes = syncToExcelFiles(fullData.chronologicalProjects || fullData.projects);
     csvUpdated = syncRes.csvUpdated;
     xlsxUpdated = syncRes.xlsxUpdated;
   } catch (_) {}
@@ -876,7 +882,7 @@ export async function updateProject(
   let xlsxUpdated = false;
   try {
     const fullData = await getProjects(true);
-    const syncRes = syncToExcelFiles(fullData.projects);
+    const syncRes = syncToExcelFiles(fullData.chronologicalProjects || fullData.projects);
     csvUpdated = syncRes.csvUpdated;
     xlsxUpdated = syncRes.xlsxUpdated;
   } catch (err) {
@@ -934,7 +940,7 @@ export async function resetProjectOverride(
     let xlsxUpdated = false;
     try {
       const fullData = await getProjects(true);
-      const syncRes = syncToExcelFiles(fullData.projects);
+      const syncRes = syncToExcelFiles(fullData.chronologicalProjects || fullData.projects);
       csvUpdated = syncRes.csvUpdated;
       xlsxUpdated = syncRes.xlsxUpdated;
     } catch (_) {}
@@ -1000,7 +1006,7 @@ export async function deleteProject(
   let xlsxUpdated = false;
   try {
     const remaining = await getProjects(true);
-    const syncRes = syncToExcelFiles(remaining.projects);
+    const syncRes = syncToExcelFiles(remaining.chronologicalProjects || remaining.projects);
     csvUpdated = syncRes.csvUpdated;
     xlsxUpdated = syncRes.xlsxUpdated;
   } catch (err) {

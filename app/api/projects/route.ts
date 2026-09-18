@@ -20,7 +20,8 @@ export async function GET(request: Request) {
     const data = await getProjects(forceRefresh);
 
     if (exportFormat === 'xlsx') {
-      const buffer = projectsToXLSXBuffer(data.projects);
+      const exportList = data.chronologicalProjects || data.projects;
+      const buffer = projectsToXLSXBuffer(exportList);
       return new NextResponse(new Uint8Array(buffer), {
         status: 200,
         headers: {
@@ -31,7 +32,8 @@ export async function GET(request: Request) {
     }
 
     if (exportFormat === 'csv') {
-      const csv = projectsToCSV(data.projects);
+      const exportList = data.chronologicalProjects || data.projects;
+      const csv = projectsToCSV(exportList);
       return new NextResponse(csv, {
         status: 200,
         headers: {

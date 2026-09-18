@@ -136,6 +136,21 @@ export default function UploadPage() {
             });
           }
         } catch (_) {}
+
+        // Merge client-side localStorage custom projects
+        try {
+          const storedCustom = localStorage.getItem('easitronics_custom_projects');
+          if (storedCustom) {
+            const customArr: Project[] = JSON.parse(storedCustom);
+            const existingIds = new Set(projects.map((p) => p.id));
+            const existingTitles = new Set(projects.map((p) => p.title.toLowerCase().trim()));
+            const missingCustom = customArr.filter(
+              (cp) => !existingIds.has(cp.id) && !existingTitles.has(cp.title.toLowerCase().trim())
+            );
+            projects = [...missingCustom, ...projects];
+          }
+        } catch (_) {}
+
         setExistingProjects(projects);
       }
     } catch (err) {
@@ -146,7 +161,7 @@ export default function UploadPage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'edit' && existingProjects.length === 0) {
+    if (activeTab === 'edit') {
       loadExistingProjects();
     }
   }, [activeTab]);
@@ -476,9 +491,24 @@ export default function UploadPage() {
         throw new Error(result.error || 'Failed to add project');
       }
 
-      let successMsg = `Project "${formData.title}" added to catalog & automatically updated in Excel sheet (.xlsx & .csv)!`;
+      if (result.project) {
+        // 1. Immediately update table in Edit tab
+        setExistingProjects((prev) => [result.project, ...prev]);
+
+        // 2. Persist in client-side localStorage
+        try {
+          const stored = localStorage.getItem('easitronics_custom_projects');
+          const customArr: Project[] = stored ? JSON.parse(stored) : [];
+          customArr.unshift(result.project);
+          localStorage.setItem('easitronics_custom_projects', JSON.stringify(customArr));
+        } catch (_) {}
+      }
+
+      let successMsg = `Project "${formData.title}" added to catalog & saved to local Excel sheet (.xlsx & .csv)!`;
       if (result.sheetSynced) {
         successMsg += ' ✨ Live Google Sheet automatically updated!';
+      } else {
+        successMsg += ' (Note: To sync live to your online Google Sheet, configure the Google Sheet Webhook in the Sync tab).';
       }
       setFormSuccess(successMsg);
 
@@ -1684,7 +1714,24 @@ function doPost(e) {
     }
   }
 
-  // 2. Handle Appending New Project Rows
+  // 2. Handle Deleting Project Row
+  if (data.action === 'delete') {
+    var targetTitle = (data.title || '').toString().trim().toLowerCase();
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var titles = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < titles.length; i++) {
+        var rowTitle = (titles[i][0] || '').toString().trim().toLowerCase();
+        if (rowTitle === targetTitle) {
+          sheet.deleteRow(i + 2);
+          return ContentService.createTextOutput(JSON.stringify({ status: 'success', action: 'deleted', row: i + 2 }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+    }
+  }
+
+  // 3. Handle Appending New Project Rows
   var rows = Array.isArray(data) ? data : (data.projects || [data]);
   rows.forEach(function(p) {
     if (p && p.title) {
