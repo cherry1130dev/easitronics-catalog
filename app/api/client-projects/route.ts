@@ -32,7 +32,9 @@ function saveProjectsToFile(projects: ClientProjectBrief[]): void {
   fs.writeFileSync(CLIENT_PROJECTS_FILE, JSON.stringify(projects, null, 2), 'utf-8');
 }
 
-export async function importGoogleFormProjects(existingProjects: ClientProjectBrief[]) {
+export const dynamic = 'force-dynamic';
+
+async function importGoogleFormProjects(existingProjects: ClientProjectBrief[]) {
   const res = await fetch(GOOGLE_FORM_RESPONSES_CSV_URL, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Failed to fetch Google Form sheet: ${res.statusText}`);
