@@ -1,8 +1,6 @@
 'use client';
 
 import AmazonSearchBar from './AmazonSearchBar';
-import { EASITRONICS } from '@/lib/constants';
-import { Sparkles } from 'lucide-react';
 
 interface HeroProps {
   searchQuery: string;
@@ -20,39 +18,10 @@ export default function Hero({
   onQuickFilter,
 }: HeroProps) {
   return (
-    <section className="bg-slate-950 pt-5 pb-6 sm:pt-8 sm:pb-10 text-white border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 text-center">
-        {/* Sub-badge & Easi AI Launcher */}
-        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] sm:text-xs text-amber-300 font-medium">
-            <span>Official Catalog • {EASITRONICS.name}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('open-gemini-chat'));
-              }
-            }}
-            className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-amber-400/10 hover:bg-amber-400/25 border border-amber-400/40 text-[11px] sm:text-xs text-amber-300 hover:text-amber-200 font-semibold transition-all cursor-pointer shadow-sm active:scale-95"
-            title="Chat with Easi - AI Project Advisor (Powered by Gemini AI)"
-          >
-            <Sparkles className="w-3 h-3 text-amber-400 fill-current" />
-            <span>Ask <strong>Easi</strong></span>
-          </button>
-        </div>
-
-        {/* Title - Responsive & Clear */}
-        <h1 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight text-white max-w-3xl mx-auto mb-1.5 sm:mb-2 leading-tight">
-          {EASITRONICS.name} Projects & Titles
-        </h1>
-
-        <p className="text-slate-400 text-xs sm:text-sm max-w-2xl mx-auto mb-4 sm:mb-6 leading-relaxed px-1">
-          Explore verified engineering projects across ECE, CSE, EEE, Mech, Civil & Medical.
-        </p>
-
-        {/* Amazon-Style Search Bar */}
-        <div className="mb-3 sm:mb-4">
+    <section className="bg-[#232f3e] py-3 sm:py-4 text-white border-b border-slate-700/80 shadow-inner">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        {/* Prominent & Highly Visible Amazon Search Bar */}
+        <div className="mb-2.5 sm:mb-3">
           <AmazonSearchBar
             value={searchQuery}
             scope={searchScope}
@@ -61,54 +30,64 @@ export default function Hero({
           />
         </div>
 
-        {/* Quick Filter Pill Suggestions - Horizontal swipeable on mobile */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-1 -mx-2 sm:mx-0 sm:flex-wrap sm:justify-center text-xs text-slate-400">
-          <span className="text-slate-500 font-medium shrink-0 hidden sm:inline mr-1">Popular:</span>
+        {/* Popular Quick-Filter Buttons (Preserved Exactly) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 px-1 -mx-2 sm:mx-0 sm:flex-wrap sm:justify-center text-xs">
+          <span className="text-amber-400 font-bold shrink-0 hidden sm:inline mr-1 text-xs">
+            Popular:
+          </span>
           <button
+            type="button"
             onClick={() => onQuickFilter('branch', 'ECE')}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             ⚡ ECE
           </button>
           <button
+            type="button"
             onClick={() => onQuickFilter('branch', 'CSE')}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             💻 CSE
           </button>
           <button
+            type="button"
             onClick={() => onQuickFilter('branch', 'EEE')}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             🔋 EEE
           </button>
           <button
+            type="button"
             onClick={() => onQuickFilter('domain', 'IoT')}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             🌐 IoT
           </button>
           <button
+            type="button"
             onClick={() => onQuickFilter('domain', 'Robotics')}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             🤖 Robotics
           </button>
           <button
+            type="button"
             onClick={() => onQuickFilter('domain', 'Machine Learning')}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             🧠 Machine Learning
           </button>
           <button
+            type="button"
             onClick={() => onQuickFilter('price', { bracket: 'under-10k', min: 0, max: 10000 })}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             🏷️ Under ₹10,000
           </button>
           <button
+            type="button"
             onClick={() => onQuickFilter('type', 'Prototype')}
-            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-400 hover:text-white transition-colors shrink-0 active:bg-slate-800"
+            className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-amber-400 text-white font-medium transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             🔬 Prototypes
           </button>

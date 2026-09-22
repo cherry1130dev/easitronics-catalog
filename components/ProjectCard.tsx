@@ -13,13 +13,13 @@ interface ProjectCardProps {
   index?: number;
 }
 
-const DOMAIN_COLOR_MAP: Record<string, { badge: string; border: string }> = {
-  IoT: { badge: 'bg-cyan-950/70 text-cyan-300 border-cyan-800/60', border: 'border-cyan-500/20' },
-  Embedded: { badge: 'bg-amber-950/70 text-amber-300 border-amber-800/60', border: 'border-amber-500/20' },
-  Robotics: { badge: 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60', border: 'border-emerald-500/20' },
-  'Machine Learning': { badge: 'bg-indigo-950/70 text-indigo-300 border-indigo-800/60', border: 'border-indigo-500/20' },
-  Simulation: { badge: 'bg-rose-950/70 text-rose-300 border-rose-800/60', border: 'border-rose-500/20' },
-  'Large AI': { badge: 'bg-purple-950/70 text-purple-300 border-purple-800/60', border: 'border-purple-500/20' },
+const DOMAIN_COLOR_MAP: Record<string, { badge: string }> = {
+  IoT: { badge: 'bg-cyan-50 text-cyan-800 border-cyan-200' },
+  Embedded: { badge: 'bg-amber-50 text-amber-800 border-amber-200' },
+  Robotics: { badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  'Machine Learning': { badge: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
+  Simulation: { badge: 'bg-rose-50 text-rose-800 border-rose-200' },
+  'Large AI': { badge: 'bg-purple-50 text-purple-800 border-purple-200' },
 };
 
 export default function ProjectCard({ project, searchQuery = '', index }: ProjectCardProps) {
@@ -34,13 +34,13 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
   };
 
   return (
-    <div className="group relative flex flex-col justify-between bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all duration-200">
+    <div className="group relative flex flex-col justify-between bg-white border border-slate-200 hover:border-amber-400 hover:shadow-md rounded-xl p-4 sm:p-5 shadow-sm transition-all duration-200">
       {/* Top Header Row: Badges & Identifiers */}
       <div>
         <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2.5">
           <div className="flex flex-wrap items-center gap-1.5">
             {index !== undefined && (
-              <span className="text-[10px] font-mono text-slate-400 font-bold px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800">
+              <span className="text-[10px] font-mono text-slate-500 font-bold px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
                 #{String(index + 1).padStart(2, '0')}
               </span>
             )}
@@ -48,7 +48,7 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
             {/* Domain Badges */}
             {parseDomains(project.domain).map((dom) => {
               const domainStyle = DOMAIN_COLOR_MAP[dom] || {
-                badge: 'bg-cyan-950/70 text-cyan-300 border-cyan-800/60',
+                badge: 'bg-cyan-50 text-cyan-800 border-cyan-200',
               };
               return (
                 <span key={dom} className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${domainStyle.badge}`}>
@@ -59,17 +59,17 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
 
             {/* Branch Badges */}
             {parseBranches(project.branch).map((br) => (
-              <span key={br} className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+              <span key={br} className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                 {br}
               </span>
             ))}
 
             {/* Project Type Badge */}
             <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
                 project.type === 'Product'
-                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/70'
-                  : 'bg-blue-950/80 text-blue-300 border border-blue-800/70'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-blue-50 text-blue-800 border-blue-200'
               }`}
             >
               {project.type}
@@ -79,18 +79,18 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
           {/* Featured or Demo Indicator */}
           <div className="flex items-center gap-1.5">
             {project.featured && (
-              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-sm">
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#febd69] text-slate-950 shadow-sm">
                 <Sparkles className="w-3 h-3 fill-current" />
                 Featured
               </span>
             )}
             {project.source === 'custom' && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                 New
               </span>
             )}
             {project.isEdited && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-800">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
                 Updated
               </span>
             )}
@@ -99,13 +99,13 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
 
         {/* Project Title (Image-Free, Large, Clear & Search-Highlighted) */}
         <Link href={`/projects/${project.id}`} className="block group/title">
-          <h3 className="font-bold text-base sm:text-lg text-white group-hover/title:text-amber-400 transition-colors leading-snug mb-2 break-words">
+          <h3 className="font-bold text-base sm:text-lg text-slate-900 group-hover/title:text-amber-700 transition-colors leading-snug mb-2 break-words">
             <HighlightText text={project.title} query={searchQuery} />
           </h3>
         </Link>
 
         {/* Description with Search Highlighting */}
-        <p className="text-xs sm:text-sm text-slate-400 line-clamp-3 mb-3 leading-relaxed">
+        <p className="text-xs sm:text-sm text-slate-600 line-clamp-3 mb-3 leading-relaxed">
           <HighlightText text={project.description} query={searchQuery} />
         </p>
 
@@ -115,13 +115,13 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
             {project.tags.slice(0, 4).map((tag, i) => (
               <span
                 key={i}
-                className="text-[10px] bg-slate-950 text-slate-400 border border-slate-800 px-2 py-0.5 rounded hover:text-slate-200"
+                className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded hover:text-slate-900"
               >
                 #{tag}
               </span>
             ))}
             {project.tags.length > 4 && (
-              <span className="text-[10px] text-slate-500 self-center">
+              <span className="text-[10px] text-slate-400 self-center">
                 +{project.tags.length - 4} more
               </span>
             )}
@@ -130,16 +130,16 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
       </div>
 
       {/* Bottom Footer: Price & Actions */}
-      <div className="pt-3 border-t border-slate-800 flex items-end justify-between mt-2 gap-2">
+      <div className="pt-3 border-t border-slate-200 flex items-end justify-between mt-2 gap-2">
         <div className="min-w-0">
           <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-semibold truncate">
             Estimated Cost
           </span>
-          <span className="text-base sm:text-xl font-extrabold text-white flex items-center tracking-tight text-amber-300">
+          <span className="text-base sm:text-xl font-black text-slate-900 flex items-center tracking-tight">
             <IndianRupee className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline shrink-0" />
             {project.price.toLocaleString('en-IN')}
           </span>
-          <span className="text-[9px] sm:text-[10px] text-amber-400/90 font-medium block leading-tight mt-0.5">
+          <span className="text-[9px] sm:text-[10px] text-amber-700 font-medium block leading-tight mt-0.5">
             *Estimation only
           </span>
         </div>
@@ -149,20 +149,20 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
           <button
             onClick={handleCopyTitle}
             title="Copy complete project specifications, overview & quotation details"
-            className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg text-xs font-semibold border transition-all active:scale-95 ${
+            className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${
               copied
-                ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border-slate-300'
             }`}
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
                 <span className="text-[10px] sm:text-[11px] font-bold">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
                 <span className="text-[10px] sm:text-[11px]">Copy</span>
               </>
             )}
@@ -171,7 +171,7 @@ export default function ProjectCard({ project, searchQuery = '', index }: Projec
           {/* Details Link */}
           <Link
             href={`/projects/${project.id}`}
-            className="inline-flex items-center gap-1 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg text-xs font-bold bg-amber-400 hover:bg-amber-500 text-slate-950 transition-all shadow-sm active:scale-95"
+            className="inline-flex items-center gap-1 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg text-xs font-bold bg-[#ffd814] hover:bg-[#f7ca00] text-slate-950 transition-all shadow-sm active:scale-95 border border-[#fcd200] cursor-pointer"
           >
             <span>Details</span>
             <ArrowRight className="w-3.5 h-3.5" />

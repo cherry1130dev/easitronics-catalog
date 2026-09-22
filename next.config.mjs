@@ -19,6 +19,16 @@ const nextConfig = {
         destination: '/upload',
         permanent: true,
       },
+      {
+        source: '/dev',
+        destination: '/update',
+        permanent: true,
+      },
+      {
+        source: '/developer',
+        destination: '/update',
+        permanent: true,
+      },
     ];
   },
 };

@@ -25,17 +25,30 @@ import {
   X,
   IndianRupee,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Cpu
 } from 'lucide-react';
 import { GOOGLE_SHEET_VIEW_URL } from '@/lib/constants';
 import { Project, ProjectKind, parseBranches, parseDomains } from '@/lib/types';
+import ProjectComponentsManager from '@/components/ProjectComponentsManager';
 
 const BRANCH_OPTIONS = ['ECE', 'CSE', 'EEE', 'Mechanical', 'Civil', 'Medical', 'Other'];
 const DOMAIN_OPTIONS = ['IoT', 'Embedded', 'Robotics', 'Machine Learning', 'Simulation', 'Large AI', 'Other'];
 
 export default function UploadPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'form' | 'csv' | 'edit' | 'sheet'>('form');
+  const [activeTab, setActiveTab] = useState<'components' | 'form' | 'csv' | 'edit' | 'sheet'>('components');
+
+  // Read URL search param for tab
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['components', 'form', 'csv', 'edit', 'sheet'].includes(tabParam)) {
+        setActiveTab(tabParam as any);
+      }
+    }
+  }, []);
 
   // Single Project Form State
   const [formData, setFormData] = useState({
@@ -713,38 +726,53 @@ function doPost(e) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 py-10">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#eaeded] text-[#0f1111] py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Back Link */}
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-amber-400 mb-6 transition-colors group bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg"
+          className="inline-flex items-center gap-2 text-xs font-bold text-[#007185] hover:text-[#c7511f] mb-5 transition-colors group bg-white border border-[#d5d9d9] px-3.5 py-1.5 rounded-lg shadow-xs"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Catalog</span>
+          <span>Back to EasiCart Catalog</span>
         </Link>
 
         {/* Page Header */}
-        <div className="mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs text-teal-300 font-medium mb-3">
-            <span>Easitronics Admin Portal</span>
+        <div className="mb-6 bg-white border border-[#d5d9d9] rounded-2xl p-5 sm:p-6 shadow-sm">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fef8e7] border border-[#fbd8b5] text-xs text-[#b12704] font-bold mb-2">
+            <span>EasiCart Developer Hub (powered by Easitronics)</span>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
-            Easitronics Project Upload & Sheet Sync
+          <h1 className="text-2xl sm:text-3xl font-black text-[#0f1111] tracking-tight mb-1.5">
+            Developer Project Hub & Components Tracker
           </h1>
-          <p className="text-slate-400 text-sm sm:text-base max-w-2xl">
-            Add new project titles to the Easitronics catalog, bulk import via CSV file, or synchronize and export updates to your Google Sheet.
+          <p className="text-[#565959] text-xs sm:text-sm max-w-3xl">
+            Import project titles directly from your Google Form responses spreadsheet, type project notes and required components, track quantities, and inspect your consolidated Master Shopping List.
           </p>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
+        <div className="flex flex-wrap gap-2 pb-4 mb-6">
+          <button
+            onClick={() => setActiveTab('components')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${
+              activeTab === 'components'
+                ? 'bg-[#ffd814] text-[#0f1111] border border-[#fcd200]'
+                : 'bg-white text-[#565959] hover:text-[#0f1111] border border-[#d5d9d9]'
+            }`}
+          >
+            <Cpu className="w-4 h-4 text-[#007185]" />
+            <span>Components & Note Forms</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+              Form Linked
+            </span>
+          </button>
+
           <button
             onClick={() => setActiveTab('form')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${
               activeTab === 'form'
-                ? 'bg-amber-400 text-slate-950 shadow-sm'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                ? 'bg-[#ffd814] text-[#0f1111] border border-[#fcd200]'
+                : 'bg-white text-[#565959] hover:text-[#0f1111] border border-[#d5d9d9]'
             }`}
           >
             <PlusCircle className="w-4 h-4" />
@@ -753,10 +781,10 @@ function doPost(e) {
 
           <button
             onClick={() => setActiveTab('csv')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${
               activeTab === 'csv'
-                ? 'bg-amber-400 text-slate-950 shadow-sm'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                ? 'bg-[#ffd814] text-[#0f1111] border border-[#fcd200]'
+                : 'bg-white text-[#565959] hover:text-[#0f1111] border border-[#d5d9d9]'
             }`}
           >
             <UploadCloud className="w-4 h-4" />
@@ -765,16 +793,16 @@ function doPost(e) {
 
           <button
             onClick={() => setActiveTab('edit')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${
               activeTab === 'edit'
-                ? 'bg-amber-400 text-slate-950 shadow-sm'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                ? 'bg-[#ffd814] text-[#0f1111] border border-[#fcd200]'
+                : 'bg-white text-[#565959] hover:text-[#0f1111] border border-[#d5d9d9]'
             }`}
           >
             <Pencil className="w-4 h-4" />
-            <span>Edit Existing Titles</span>
+            <span>Edit Catalog Titles</span>
             {existingProjects.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-950/60 font-mono text-amber-300">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 font-mono text-[#0f1111]">
                 {existingProjects.length}
               </span>
             )}
@@ -782,16 +810,23 @@ function doPost(e) {
 
           <button
             onClick={() => setActiveTab('sheet')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${
               activeTab === 'sheet'
-                ? 'bg-amber-400 text-slate-950 shadow-sm'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                ? 'bg-[#ffd814] text-[#0f1111] border border-[#fcd200]'
+                : 'bg-white text-[#565959] hover:text-[#0f1111] border border-[#d5d9d9]'
             }`}
           >
             <Table className="w-4 h-4" />
             <span>Google Sheet Sync & Export</span>
           </button>
         </div>
+
+        {/* TAB 0: Project Components & Client Brief Tracker */}
+        {activeTab === 'components' && (
+          <div className="space-y-6">
+            <ProjectComponentsManager catalogProjects={existingProjects} />
+          </div>
+        )}
 
         {/* TAB 1: Single Project Form */}
         {activeTab === 'form' && (

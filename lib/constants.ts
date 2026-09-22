@@ -4,11 +4,21 @@ export const GOOGLE_SHEET_CSV_URL =
 export const GOOGLE_SHEET_VIEW_URL =
   'https://docs.google.com/spreadsheets/d/1O0LbClLHpuz0hGzSm-2Uja1znJZnKAx3-B7kyIvyKSc/edit?usp=sharing';
 
+export const GOOGLE_FORM_RESPONSES_SHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1N-Y7BH0Cf3rgC3LEy2tYlRBHm46nLB3RcABcgrt3YlQ/edit?usp=sharing';
+
+export const GOOGLE_FORM_RESPONSES_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/1N-Y7BH0Cf3rgC3LEy2tYlRBHm46nLB3RcABcgrt3YlQ/export?format=csv';
+
 export const EASITRONICS = {
-  name: 'Easitronics',
-  fullName: 'Easitronics - Engineering Projects & Electronics Store',
-  tagline: 'Your ultimate partner for engineering projects, electronics components, and expert assistance.',
-  logoUrl: 'https://i.ibb.co/wNxjf0TY/easitronics-logo.jpg',
+  name: 'EasiCart',
+  brandName: 'EasiCart',
+  poweredBy: 'Easitronics',
+  companyName: 'Easitronics',
+  fullName: 'EasiCart powered by Easitronics',
+  catalogName: 'EasiCart powered by Easitronics',
+  tagline: 'EasiCart powered by Easitronics — Your ultimate partner for engineering projects, electronics components, and expert assistance.',
+  logoUrl: '/logo.jpg',
   officialUrl: 'https://esitronics.netlify.app/',
   aiName: 'Easi',
   aiTagline: 'Easi - Powered by Gemini AI',

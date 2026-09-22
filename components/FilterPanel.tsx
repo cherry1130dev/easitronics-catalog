@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FilterState, ProjectKind } from '@/lib/types';
-import { Filter, RotateCcw, Check, IndianRupee, ChevronDown, ChevronUp } from 'lucide-react';
+import { Filter, RotateCcw, Check, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface FilterPanelProps {
   filters: FilterState;
@@ -104,17 +104,17 @@ export default function FilterPanel({
     Boolean(filters.searchScope && filters.searchScope !== 'All');
 
   return (
-    <aside className="w-full bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm text-slate-200">
+    <aside className="w-full bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm text-slate-800">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-amber-400" />
-          <h3 className="font-bold text-sm text-white uppercase tracking-wider">Filters</h3>
+          <Filter className="w-4 h-4 text-amber-600" />
+          <h3 className="font-bold text-sm text-slate-900 uppercase tracking-wider">Filters</h3>
         </div>
         {hasActiveFilters && (
           <button
             onClick={onReset}
-            className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium active:scale-95"
+            className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 transition-colors font-semibold active:scale-95 cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" />
             Reset All
@@ -123,26 +123,26 @@ export default function FilterPanel({
       </div>
 
       {/* 1. Branch Filter (Collapsible) */}
-      <div className="mb-4 pb-4 border-b border-slate-800/80">
+      <div className="mb-4 pb-4 border-b border-slate-200">
         <button
           type="button"
           onClick={() => toggleSection('branch')}
-          className="w-full flex items-center justify-between py-1 text-left group"
+          className="w-full flex items-center justify-between py-1 text-left group cursor-pointer"
         >
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+            <span className="text-xs font-bold text-slate-900 uppercase tracking-wider group-hover:text-amber-700 transition-colors">
               Branch
             </span>
             {filters.branches.length > 0 && (
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950">
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#febd69] text-slate-950">
                 {filters.branches.length}
               </span>
             )}
           </div>
           {openSections.branch ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
+            <ChevronUp className="w-4 h-4 text-slate-500" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-500" />
           )}
         </button>
 
@@ -155,10 +155,10 @@ export default function FilterPanel({
                 <button
                   key={branch}
                   onClick={() => toggleBranch(branch)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all active:scale-[0.98] cursor-pointer ${
                     isSelected
-                      ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-[#febd69] text-slate-950 font-bold shadow-sm'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -166,16 +166,16 @@ export default function FilterPanel({
                       className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
                         isSelected
                           ? 'border-slate-950 bg-slate-950 text-amber-400'
-                          : 'border-slate-700 bg-slate-800'
+                          : 'border-slate-300 bg-white'
                       }`}
                     >
-                      {isSelected && <Check className="w-3 h-3" />}
+                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
                     <span>{branch}</span>
                   </div>
                   <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded ${
-                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-100 text-slate-600'
                     }`}
                   >
                     {count}
@@ -188,32 +188,32 @@ export default function FilterPanel({
       </div>
 
       {/* 2. Cost / Price Filter (Collapsible) */}
-      <div className="mb-4 pb-4 border-b border-slate-800/80">
+      <div className="mb-4 pb-4 border-b border-slate-200">
         <button
           type="button"
           onClick={() => toggleSection('price')}
-          className="w-full flex items-center justify-between py-1 text-left group"
+          className="w-full flex items-center justify-between py-1 text-left group cursor-pointer"
         >
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+            <span className="text-xs font-bold text-slate-900 uppercase tracking-wider group-hover:text-amber-700 transition-colors">
               Estimated Budget
             </span>
             {filters.priceBracket !== 'all' && (
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950">
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#febd69] text-slate-950">
                 Active
               </span>
             )}
           </div>
           {openSections.price ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
+            <ChevronUp className="w-4 h-4 text-slate-500" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-500" />
           )}
         </button>
 
         {openSections.price && (
           <div className="mt-2.5">
-            <p className="text-[10px] text-amber-400/90 font-medium mb-2">
+            <p className="text-[10px] text-amber-700 font-medium mb-2">
               *Costs are estimation only, not fixed.
             </p>
             <div className="space-y-1 mb-3">
@@ -223,42 +223,42 @@ export default function FilterPanel({
                   <button
                     key={bracket.id}
                     onClick={() => handleSelectBracket(bracket.id, bracket.min, bracket.max)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between active:scale-[0.98] ${
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between active:scale-[0.98] cursor-pointer ${
                       isSelected
-                        ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        ? 'bg-[#febd69] text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
                     <span>{bracket.label}</span>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-slate-950 shrink-0" />}
+                    {isSelected && <Check className="w-3.5 h-3.5 text-slate-950 shrink-0 stroke-[2.5]" />}
                   </button>
                 );
               })}
             </div>
 
             {/* Custom Price Range input form */}
-            <form onSubmit={handleApplyCustomPrice} className="pt-2 border-t border-slate-800/80">
-              <span className="text-[11px] text-slate-400 block mb-1.5">Custom Range (₹)</span>
+            <form onSubmit={handleApplyCustomPrice} className="pt-2 border-t border-slate-200">
+              <span className="text-[11px] text-slate-600 font-medium block mb-1.5">Custom Range (₹)</span>
               <div className="flex items-center gap-2 mb-2">
                 <input
                   type="text"
                   placeholder="Min"
                   value={customMin}
                   onChange={(e) => setCustomMin(e.target.value)}
-                  className="w-1/2 px-2.5 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 outline-none focus:border-amber-400"
+                  className="w-1/2 px-2.5 py-2 text-xs bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 outline-none focus:border-amber-500"
                 />
-                <span className="text-slate-500 text-xs">-</span>
+                <span className="text-slate-400 text-xs">-</span>
                 <input
                   type="text"
                   placeholder="Max"
                   value={customMax}
                   onChange={(e) => setCustomMax(e.target.value)}
-                  className="w-1/2 px-2.5 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 outline-none focus:border-amber-400"
+                  className="w-1/2 px-2.5 py-2 text-xs bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 outline-none focus:border-amber-500"
                 />
               </div>
               <button
                 type="submit"
-                className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-slate-700 transition-colors active:scale-95"
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg border border-slate-300 transition-colors active:scale-95 cursor-pointer"
               >
                 Apply Custom Budget
               </button>
@@ -268,26 +268,26 @@ export default function FilterPanel({
       </div>
 
       {/* 3. Domain Filter (Collapsible) */}
-      <div className="mb-4 pb-4 border-b border-slate-800/80">
+      <div className="mb-4 pb-4 border-b border-slate-200">
         <button
           type="button"
           onClick={() => toggleSection('domain')}
-          className="w-full flex items-center justify-between py-1 text-left group"
+          className="w-full flex items-center justify-between py-1 text-left group cursor-pointer"
         >
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+            <span className="text-xs font-bold text-slate-900 uppercase tracking-wider group-hover:text-amber-700 transition-colors">
               Technology Domain
             </span>
             {filters.domains.length > 0 && (
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950">
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#febd69] text-slate-950">
                 {filters.domains.length}
               </span>
             )}
           </div>
           {openSections.domain ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
+            <ChevronUp className="w-4 h-4 text-slate-500" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-500" />
           )}
         </button>
 
@@ -300,10 +300,10 @@ export default function FilterPanel({
                 <button
                   key={domain}
                   onClick={() => toggleDomain(domain)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all active:scale-[0.98] cursor-pointer ${
                     isSelected
-                      ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-[#febd69] text-slate-950 font-bold shadow-sm'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -311,16 +311,16 @@ export default function FilterPanel({
                       className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
                         isSelected
                           ? 'border-slate-950 bg-slate-950 text-amber-400'
-                          : 'border-slate-700 bg-slate-800'
+                          : 'border-slate-300 bg-white'
                       }`}
                     >
-                      {isSelected && <Check className="w-3 h-3" />}
+                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
                     <span>{domain}</span>
                   </div>
                   <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded ${
-                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                      isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-100 text-slate-600'
                     }`}
                   >
                     {count}
@@ -334,18 +334,18 @@ export default function FilterPanel({
 
       {/* 4. Project Type Filter */}
       <div>
-        <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2">
+        <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
           Project Type
         </label>
-        <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+        <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
           {(['All', 'Prototype', 'Product'] as const).map((type) => (
             <button
               key={type}
               onClick={() => onFilterChange({ ...filters, type })}
-              className={`py-2 rounded-md font-semibold transition-all active:scale-95 ${
+              className={`py-2 rounded-md font-semibold transition-all active:scale-95 cursor-pointer ${
                 filters.type === type
-                  ? 'bg-amber-400 text-slate-950 shadow-sm font-bold'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#febd69] text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               {type}

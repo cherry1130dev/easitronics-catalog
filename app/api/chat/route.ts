@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     // System prompt grounding
     const systemPrompt = `
-You are "Easi", the official AI Engineering Project Advisor for Easitronics, powered by Google Gemini AI.
+You are "Easi", the official AI Engineering Project Advisor for EasiCart (powered by Easitronics), powered by Google Gemini AI.
 Official site: ${EASITRONICS.officialUrl}
 
 DEVELOPER & TECHNICAL SUPPORT:
@@ -44,7 +44,7 @@ DEVELOPER & TECHNICAL SUPPORT:
 • Mouli (Developer & Support): +91 7731943179 (WhatsApp)
 
 CRITICAL PRICING RULE:
-All project costs in the Easitronics catalog are ESTIMATIONS ONLY and NOT FIXED COSTS.
+All project costs in the EasiCart catalog are ESTIMATIONS ONLY and NOT FIXED COSTS.
 
 CONCISENESS & READABILITY RULES (CRITICAL):
 1. Keep EVERY response SHORT, COMPACT, and SCANNABLE (strictly 2 to 4 concise sentences or max 2 bullet items).
@@ -63,11 +63,11 @@ CONCISENESS & READABILITY RULES (CRITICAL):
         const contents = [
           {
             role: 'user',
-            parts: [{ text: systemPrompt + '\n\nPlease acknowledge your role as Easi, the AI Project Advisor powered by Gemini AI. Remember to keep answers short, crisp, and easily readable unless detailed breakdown is requested.' }],
+            parts: [{ text: systemPrompt + '\n\nPlease acknowledge your role as Easi, the AI Project Advisor for EasiCart powered by Gemini AI. Remember to keep answers short, crisp, and easily readable unless detailed breakdown is requested.' }],
           },
           {
             role: 'model',
-            parts: [{ text: 'Understood! I am Easi, the AI Project Advisor for Easitronics powered by Gemini AI. I will keep all responses short, compact, and highly readable, recommending 1-2 projects with estimated costs, and expanding only when the user requests detailed explanations. For support, I will direct students to Charan (+91 7989604815) and Mouli (+91 7731943179).' }],
+            parts: [{ text: 'Understood! I am Easi, the AI Project Advisor for EasiCart (powered by Easitronics) powered by Gemini AI. I will keep all responses short, compact, and highly readable, recommending 1-2 projects with estimated costs, and expanding only when the user requests detailed explanations. For support, I will direct students to Charan (+91 7989604815) and Mouli (+91 7731943179).' }],
           },
           ...messages.map((m: ChatMessage) => ({
             role: m.role === 'assistant' ? 'model' : 'user',

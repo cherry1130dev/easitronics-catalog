@@ -2,9 +2,7 @@
 
 import Link from 'next/link';
 import { 
-  Phone, 
   Mail, 
-  MapPin, 
   ExternalLink, 
   Sparkles,
   ShoppingBag
@@ -13,41 +11,46 @@ import { EASITRONICS } from '@/lib/constants';
 
 export default function Footer() {
   return (
-    <footer className="bg-slate-950 border-t border-slate-800 text-slate-400 pt-12 pb-8">
+    <footer className="bg-[#232f3e] border-t border-[#131921] text-slate-300 pt-10 pb-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-10">
           
           {/* Column 1: Brand & Tagline */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 border border-white/20 p-0.5 flex items-center justify-center shrink-0">
                 <img
                   src={EASITRONICS.logoUrl}
-                  alt="Easitronics"
-                  className="w-full h-full object-cover"
+                  alt="EasiCart Logo"
+                  className="w-full h-full object-cover rounded-md"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = 'none';
                   }}
                 />
               </div>
-              <span className="text-xl font-black text-white tracking-tight">
-                {EASITRONICS.name}
-              </span>
+              <div>
+                <span className="text-xl font-black text-white tracking-tight">
+                  EasiCart
+                </span>
+                <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                  powered by Easitronics
+                </span>
+              </div>
             </div>
             
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-300 leading-relaxed">
               {EASITRONICS.tagline}
             </p>
 
             {/* Easi AI Launcher Banner */}
-            <div className="pt-2">
+            <div className="pt-1">
               <button
                 onClick={() => {
                   if (typeof window !== 'undefined') {
                     window.dispatchEvent(new CustomEvent('open-gemini-chat'));
                   }
                 }}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-bold text-xs shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#febd69] hover:bg-[#f3a847] text-slate-950 font-bold text-xs shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
                 title="Open Easi - AI Project Assistant (Powered by Gemini AI)"
               >
                 <Sparkles className="w-3.5 h-3.5 fill-current" />
@@ -58,7 +61,7 @@ export default function Footer() {
 
           {/* Column 2: Official Links & Store */}
           <div>
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4 border-b border-teal-500/40 pb-1.5 inline-block">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3.5 border-b border-amber-400/40 pb-1.5 inline-block">
               Easitronics Services
             </h3>
             <ul className="space-y-2.5 text-xs">
@@ -69,7 +72,7 @@ export default function Footer() {
                   rel="noopener noreferrer"
                   className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
                 >
-                  <ExternalLink className="w-3 h-3 text-slate-500" />
+                  <ExternalLink className="w-3 h-3 text-slate-400" />
                   <span>Official Website</span>
                 </a>
               </li>
@@ -80,7 +83,7 @@ export default function Footer() {
                   rel="noopener noreferrer"
                   className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
                 >
-                  <ShoppingBag className="w-3 h-3 text-slate-500" />
+                  <ShoppingBag className="w-3 h-3 text-slate-400" />
                   <span>Electronics E-Store</span>
                 </a>
               </li>
@@ -91,7 +94,7 @@ export default function Footer() {
                   rel="noopener noreferrer"
                   className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
                 >
-                  <ExternalLink className="w-3 h-3 text-slate-500" />
+                  <ExternalLink className="w-3 h-3 text-slate-400" />
                   <span>Track Your Order</span>
                 </a>
               </li>
@@ -102,7 +105,7 @@ export default function Footer() {
                   rel="noopener noreferrer"
                   className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
                 >
-                  <Sparkles className="w-3 h-3 text-slate-500" />
+                  <Sparkles className="w-3 h-3 text-slate-400" />
                   <span>Share Your Idea</span>
                 </a>
               </li>
@@ -111,34 +114,34 @@ export default function Footer() {
 
           {/* Column 3: Engineering Disciplines */}
           <div>
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4 border-b border-amber-500/40 pb-1.5 inline-block">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3.5 border-b border-amber-400/40 pb-1.5 inline-block">
               Departments & Domains
             </h3>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <span className="text-slate-400">• ECE Branch</span>
-              <span className="text-slate-400">• IoT & Smart Tech</span>
-              <span className="text-slate-400">• CSE Branch</span>
-              <span className="text-slate-400">• Machine Learning</span>
-              <span className="text-slate-400">• EEE Branch</span>
-              <span className="text-slate-400">• Embedded Systems</span>
-              <span className="text-slate-400">• Mechanical</span>
-              <span className="text-slate-400">• Robotics & Control</span>
-              <span className="text-slate-400">• Civil & Medical</span>
-              <span className="text-slate-400">• Simulation / AI</span>
+              <span className="text-slate-300">• ECE Branch</span>
+              <span className="text-slate-300">• IoT & Smart Tech</span>
+              <span className="text-slate-300">• CSE Branch</span>
+              <span className="text-slate-300">• Machine Learning</span>
+              <span className="text-slate-300">• EEE Branch</span>
+              <span className="text-slate-300">• Embedded Systems</span>
+              <span className="text-slate-300">• Mechanical</span>
+              <span className="text-slate-300">• Robotics & Control</span>
+              <span className="text-slate-300">• Civil & Medical</span>
+              <span className="text-slate-300">• Simulation / AI</span>
             </div>
           </div>
 
           {/* Column 4: Developers & Technical Support */}
           <div>
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4 border-b border-teal-500/40 pb-1.5 inline-block">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3.5 border-b border-amber-400/40 pb-1.5 inline-block">
               Developers & Support
             </h3>
             <ul className="space-y-3 text-xs">
               {/* Charan */}
-              <li className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors">
+              <li className="p-2.5 rounded-lg bg-[#131921] border border-slate-700/80 hover:border-slate-600 transition-colors">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-white text-xs">Charan</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-800">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
                     Developer & Support
                   </span>
                 </div>
@@ -151,7 +154,7 @@ export default function Footer() {
                   >
                     <span>WhatsApp</span>
                   </a>
-                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-500">•</span>
                   <a
                     href="tel:+917989604815"
                     className="inline-flex items-center gap-1 text-[11px] text-slate-300 hover:text-white transition-colors"
@@ -162,10 +165,10 @@ export default function Footer() {
               </li>
 
               {/* Mouli */}
-              <li className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors">
+              <li className="p-2.5 rounded-lg bg-[#131921] border border-slate-700/80 hover:border-slate-600 transition-colors">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-white text-xs">Mouli</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-800">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
                     Developer & Support
                   </span>
                 </div>
@@ -178,7 +181,7 @@ export default function Footer() {
                   >
                     <span>WhatsApp</span>
                   </a>
-                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-500">•</span>
                   <a
                     href="tel:+917731943179"
                     className="inline-flex items-center gap-1 text-[11px] text-slate-300 hover:text-white transition-colors"
@@ -188,7 +191,7 @@ export default function Footer() {
                 </div>
               </li>
 
-              <li className="flex items-center gap-2 pt-1 text-slate-400">
+              <li className="flex items-center gap-2 pt-1 text-slate-300">
                 <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                 <a href={`mailto:${EASITRONICS.email}`} className="hover:text-amber-400 transition-colors">
                   {EASITRONICS.email}
@@ -200,18 +203,18 @@ export default function Footer() {
         </div>
 
         {/* Bottom Copyright & Disclaimer */}
-        <div className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="pt-6 border-t border-[#131921] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div>
             <p suppressHydrationWarning>
-              © {new Date().getFullYear()} {EASITRONICS.name}. All rights reserved. Engineering Projects, Hardware Kits & Software Solutions.
+              © {new Date().getFullYear()} EasiCart powered by Easitronics. All rights reserved. Engineering Projects, Hardware Kits, Component Lists & Software Solutions.
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
               *Disclaimer: Project pricing shown across the catalog is an <strong>estimation only and not a fixed cost</strong>. Final quotes depend on custom sensor models, component availability, and delivery scopes.
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <Link href="/" className="hover:text-slate-300 transition-colors">
+          <div className="flex items-center gap-4 flex-wrap">
+            <Link href="/" className="hover:text-white transition-colors">
               Catalog
             </Link>
             <a

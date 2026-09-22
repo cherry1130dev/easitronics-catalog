@@ -71,3 +71,48 @@ export function parseDomains(domainStr?: string | string[]): string[] {
   const parts = domainStr.split(/[,/|]+/).map((s) => s.trim()).filter(Boolean);
   return parts.length > 0 ? parts : ['IoT'];
 }
+/**
+ * Component requirement item within a project
+ */
+export interface ProjectComponent {
+  id: string;
+  name: string;
+  quantity: number;
+  category?: 'Microcontroller' | 'Sensor' | 'Display' | 'Actuator' | 'Power' | 'Wireless' | 'Hardware' | 'Other' | string;
+  notes?: string; // specific specs, pinouts, rating
+  status: 'pending' | 'procured' | 'assembled';
+}
+
+export type ClientProjectStatus = 
+  | 'Planning' 
+  | 'Procuring' 
+  | 'In Development' 
+  | 'Testing' 
+  | 'Ready' 
+  | 'Delivered';
+
+export type ClientProjectPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+
+/**
+ * Client Project Brief for tracking client requirements, special requests, and component BOM
+ */
+export interface ClientProjectBrief {
+  id: string;
+  projectTitle: string;
+  catalogProjectId?: string;
+  domain?: string;
+  branch?: string;
+  clientName: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  collegeOrOrg?: string;
+  deadline?: string;
+  budget?: string;
+  status: ClientProjectStatus;
+  priority: ClientProjectPriority;
+  clientRequirements: string;
+  clientSpecialNotes: string; // HIGH PRIORITY special client requests
+  components: ProjectComponent[];
+  createdAt: string;
+  updatedAt: string;
+}

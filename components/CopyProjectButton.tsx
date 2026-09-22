@@ -17,21 +17,21 @@ export default function CopyProjectButton({ project }: { project: Project }) {
   return (
     <button
       onClick={handleCopy}
-      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
         copied
-          ? 'bg-emerald-950 text-emerald-300 border-emerald-700 shadow-sm'
-          : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-700'
+          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm'
+          : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
       }`}
       title="Copy complete project specifications, quotation estimate & contact info"
     >
       {copied ? (
         <>
-          <Check className="w-4 h-4 text-emerald-400" />
+          <Check className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
           <span>Full Details Copied to Clipboard!</span>
         </>
       ) : (
         <>
-          <Copy className="w-4 h-4 text-slate-400" />
+          <Copy className="w-4 h-4 text-slate-500" />
           <span>Copy Project Details & Estimate</span>
         </>
       )}

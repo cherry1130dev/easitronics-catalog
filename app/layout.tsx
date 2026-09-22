@@ -5,15 +5,15 @@ import Footer from "@/components/Footer";
 import GeminiChatbot from "@/components/GeminiChatbot";
 
 export const metadata: Metadata = {
-  title: "Easitronics | Engineering Project Catalog & Electronics Store",
-  description: "Easitronics - Your ultimate partner for engineering projects, electronics components, and expert assistance for students.",
+  title: "EasiCart powered by Easitronics | Engineering Project Catalog & Electronics Store",
+  description: "EasiCart powered by Easitronics - Your ultimate partner for engineering projects, electronics components, and expert assistance for students.",
   icons: {
-    icon: "https://i.ibb.co/wNxjf0TY/easitronics-logo.jpg",
+    icon: "/logo.jpg",
   },
   openGraph: {
-    title: "Easitronics - Engineering Projects & Electronics Store",
-    description: "Easitronics - Your ultimate partner for engineering projects, electronics components, and expert assistance for students.",
-    images: ["https://i.ibb.co/wNxjf0TY/easitronics-logo.jpg"],
+    title: "EasiCart powered by Easitronics - Engineering Projects & Electronics Store",
+    description: "EasiCart powered by Easitronics - Your ultimate partner for engineering projects, electronics components, and expert assistance for students.",
+    images: ["/logo.jpg"],
   },
 };
 
@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark scroll-smooth" suppressHydrationWarning>
+    <html lang="en" className="scroll-smooth" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -76,7 +76,7 @@ export default function RootLayout({
         />
       </head>
       <body 
-        className="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-amber-400 selection:text-slate-950" 
+        className="bg-[#eaeded] text-slate-900 min-h-screen flex flex-col antialiased selection:bg-amber-400 selection:text-slate-950" 
         suppressHydrationWarning
       >
         <Navbar />
