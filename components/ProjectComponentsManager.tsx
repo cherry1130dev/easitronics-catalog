@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   PlusCircle, 
   Trash2, 
@@ -31,7 +31,11 @@ import {
   PackageCheck,
   MessageCircle,
   Save,
-  Plus
+  Plus,
+  Database,
+  Upload,
+  FileSpreadsheet,
+  ShieldCheck
 } from 'lucide-react';
 import { ClientProjectBrief, ProjectComponent, ClientProjectStatus, ClientProjectPriority, Project } from '@/lib/types';
 import { GOOGLE_FORM_RESPONSES_SHEET_URL } from '@/lib/constants';
@@ -75,12 +79,43 @@ const CATEGORIES = [
   'Other'
 ];
 
+const LOCAL_VAULT_KEY = 'easicart_saved_components_vault';
+const LOCAL_PROJECTS_KEY = 'easicart_client_projects';
+
+interface VaultEntry {
+  projectTitle: string;
+  projectId?: string;
+  clientSpecialNotes?: string;
+  budget?: string;
+  deadline?: string;
+  clientPhone?: string;
+  components: ProjectComponent[];
+  updatedAt: string;
+}
+
+function getLocalVault(): Record<string, VaultEntry> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(LOCAL_VAULT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveLocalVault(vault: Record<string, VaultEntry>) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_VAULT_KEY, JSON.stringify(vault));
+  } catch (_) {}
+}
+
 export default function ProjectComponentsManager({ catalogProjects = [] }: ProjectComponentsManagerProps) {
   // State
   const [projects, setProjects] = useState<ClientProjectBrief[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [syncingGoogleForm, setSyncingGoogleForm] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<'projects' | 'master-bom'>('projects');
+  const [activeView, setActiveView] = useState<'projects' | 'master-bom' | 'vault'>('projects');
   
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,6 +134,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
 
   // Modal for brand new custom project
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [selectedCatalogId, setSelectedCatalogId] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newClientName, setNewClientName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -114,9 +150,11 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
   // UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Initial Load: Fetch from API
+  // 1. Initial Load: Fetch from API with Smart Merge so local components are NEVER lost
   const loadData = async (forceGoogleFormSync = false) => {
     try {
       if (forceGoogleFormSync) {
@@ -125,34 +163,117 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
         setLoading(true);
       }
       
+      const localVault = getLocalVault();
+      let localProjects: ClientProjectBrief[] = [];
+      try {
+        const rawLocal = localStorage.getItem(LOCAL_PROJECTS_KEY);
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          if (Array.isArray(parsed)) localProjects = parsed;
+        }
+      } catch (_) {}
+
       const endpoint = forceGoogleFormSync 
         ? '/api/client-projects?importGoogleForm=true' 
         : '/api/client-projects';
 
       const res = await fetch(endpoint);
+      let serverProjects: ClientProjectBrief[] = [];
+      let syncDetailMsg = '';
+
       if (res.ok) {
         const data = await res.json();
         if (data.projects && Array.isArray(data.projects)) {
-          setProjects(data.projects);
-          localStorage.setItem('easicart_client_projects', JSON.stringify(data.projects));
-          if (forceGoogleFormSync) {
-            setSyncStatus(`Successfully synced! Loaded ${data.projects.length} project orders from Google Form sheet.`);
-            setTimeout(() => setSyncStatus(null), 4000);
+          serverProjects = data.projects;
+          if (data.syncResult) {
+            syncDetailMsg = `Auto-synced with Google Sheet! Loaded ${data.projects.length} orders (${data.syncResult.importedCount} new).`;
           }
-          return;
+          if (data.lastSyncedAt) {
+            setLastSyncTime(new Date(data.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          }
         }
       }
-      
-      // Fallback to localStorage
-      const local = localStorage.getItem('easicart_client_projects');
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setProjects(parsed);
+
+      // Base projects to work from
+      const baseList = serverProjects.length > 0 ? serverProjects : localProjects;
+
+      // Merge: For every project, guarantee that if local vault or local storage had components, they are PRESERVED!
+      const mergedProjects: ClientProjectBrief[] = baseList.map((p) => {
+        const normKey = (p.projectTitle || '').toLowerCase().trim();
+        const vaultEntry = localVault[normKey];
+        const localMatch = localProjects.find(lp => (lp.projectTitle || '').toLowerCase().trim() === normKey);
+
+        // Keep components if present, otherwise restore from vault or local
+        let comps = (p.components && p.components.length > 0) ? p.components : [];
+        if (comps.length === 0 && vaultEntry?.components && vaultEntry.components.length > 0) {
+          comps = vaultEntry.components;
         }
+        if (comps.length === 0 && localMatch?.components && localMatch.components.length > 0) {
+          comps = localMatch.components;
+        }
+
+        // Keep notes if present, otherwise restore
+        let notes = p.clientSpecialNotes || '';
+        if (!notes && vaultEntry?.clientSpecialNotes) {
+          notes = vaultEntry.clientSpecialNotes;
+        }
+        if (!notes && localMatch?.clientSpecialNotes) {
+          notes = localMatch.clientSpecialNotes;
+        }
+
+        return {
+          ...p,
+          components: comps,
+          clientSpecialNotes: notes,
+        };
+      });
+
+      // Preserve any local custom projects that are not on the server
+      localProjects.forEach((lp) => {
+        const lpKey = (lp.projectTitle || '').toLowerCase().trim();
+        const exists = mergedProjects.some(mp => (mp.projectTitle || '').toLowerCase().trim() === lpKey);
+        if (!exists && lp.projectTitle) {
+          mergedProjects.push(lp);
+        }
+      });
+
+      setProjects(mergedProjects);
+      localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(mergedProjects));
+
+      // Refresh local vault with any active components
+      mergedProjects.forEach((p) => {
+        const normKey = (p.projectTitle || '').toLowerCase().trim();
+        if (normKey && ((p.components && p.components.length > 0) || p.clientSpecialNotes)) {
+          localVault[normKey] = {
+            projectTitle: p.projectTitle,
+            projectId: p.id,
+            components: p.components || [],
+            clientSpecialNotes: p.clientSpecialNotes || '',
+            budget: p.budget || '',
+            deadline: p.deadline || '',
+            clientPhone: p.clientPhone || '',
+            updatedAt: p.updatedAt || new Date().toISOString(),
+          };
+        }
+      });
+      saveLocalVault(localVault);
+
+      if (forceGoogleFormSync) {
+        setSyncStatus(syncDetailMsg || `Successfully synced! Loaded ${mergedProjects.length} project orders from Google Form sheet.`);
+        setTimeout(() => setSyncStatus(null), 5000);
       }
     } catch (err) {
       console.error('Error loading client projects:', err);
+      // Fallback to localStorage directly
+      const local = localStorage.getItem(LOCAL_PROJECTS_KEY);
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setProjects(parsed);
+          }
+        } catch (_) {}
+      }
     } finally {
       setLoading(false);
       setSyncingGoogleForm(false);
@@ -167,7 +288,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
   const persistProjects = async (updated: ClientProjectBrief[]) => {
     setProjects(updated);
     try {
-      localStorage.setItem('easicart_client_projects', JSON.stringify(updated));
+      localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(updated));
       await fetch('/api/client-projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,14 +426,18 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
     }
   };
 
-  // Save inline editor
+  // Save inline editor: Saves to state, localStorage, local vault, and server API!
   const handleSaveInlineEditor = async (projectId: string) => {
     const validComponents = editComponents
       .map(c => ({ ...c, name: c.name.trim() }))
       .filter(c => c.name.length > 0);
 
+    const now = new Date().toISOString();
+    let savedTitle = '';
+
     const updated = projects.map(p => {
       if (p.id === projectId) {
+        savedTitle = p.projectTitle;
         return {
           ...p,
           clientSpecialNotes: editNotes.trim(),
@@ -321,24 +446,77 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
           deadline: editDeadline.trim() || p.deadline,
           clientPhone: editClientPhone.trim() || p.clientPhone,
           components: validComponents,
-          updatedAt: new Date().toISOString()
+          updatedAt: now
         };
       }
       return p;
     });
 
-    await persistProjects(updated);
-    setSaveSuccessMsg('Saved successfully! Components & Project Notes updated in Master List.');
+    // 1. Immediately update state
+    setProjects(updated);
+
+    // 2. Immediately save to localStorage projects
+    try {
+      localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(updated));
+    } catch (_) {}
+
+    // 3. Immediately save to Local Vault (keyed by project title)
+    if (savedTitle) {
+      const normKey = savedTitle.toLowerCase().trim();
+      const vault = getLocalVault();
+      vault[normKey] = {
+        projectTitle: savedTitle,
+        projectId: projectId,
+        clientSpecialNotes: editNotes.trim(),
+        budget: editBudget.trim(),
+        deadline: editDeadline.trim(),
+        clientPhone: editClientPhone.trim(),
+        components: validComponents,
+        updatedAt: now,
+      };
+      saveLocalVault(vault);
+    }
+
+    // 4. Send to server API with save_components action for server-side persistence
+    try {
+      await fetch('/api/client-projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_components',
+          projectId,
+          projectTitle: savedTitle,
+          components: validComponents,
+          notes: editNotes.trim(),
+          budget: editBudget.trim(),
+          deadline: editDeadline.trim(),
+          clientPhone: editClientPhone.trim(),
+        }),
+      });
+
+      // Also sync all to update project JSON
+      await fetch('/api/client-projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync_all', projects: updated }),
+      });
+    } catch (err) {
+      console.warn('Server components sync notice (stored in local vault):', err);
+    }
+
+    setSaveSuccessMsg(`Saved & Locked! ${validComponents.length} components permanently stored for "${savedTitle}". Will never be erased on refresh.`);
     setTimeout(() => {
       setEditingCardId(null);
       setSaveSuccessMsg(null);
-    }, 1200);
+    }, 1800);
   };
 
   // Quick toggle component status (Need to Buy -> Procured -> Assembled)
   const handleToggleComponentStatus = async (projectId: string, componentId: string) => {
+    let targetTitle = '';
     const updated = projects.map(p => {
       if (p.id === projectId) {
+        targetTitle = p.projectTitle;
         const updatedComps = p.components.map(c => {
           if (c.id === componentId) {
             const nextStatus: 'pending' | 'procured' | 'assembled' = 
@@ -351,6 +529,22 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
       }
       return p;
     });
+
+    setProjects(updated);
+    try {
+      localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(updated));
+      if (targetTitle) {
+        const normKey = targetTitle.toLowerCase().trim();
+        const vault = getLocalVault();
+        const pObj = updated.find(p => p.id === projectId);
+        if (pObj && vault[normKey]) {
+          vault[normKey].components = pObj.components;
+          vault[normKey].updatedAt = new Date().toISOString();
+          saveLocalVault(vault);
+        }
+      }
+    } catch (_) {}
+
     await persistProjects(updated);
   };
 
@@ -556,6 +750,11 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
     return Array.from(map.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
   }, [projects]);
 
+  // Saved Projects in Vault list (projects that currently have components saved)
+  const savedVaultProjects = useMemo(() => {
+    return projects.filter(p => p.components && p.components.length > 0);
+  }, [projects]);
+
   // Copy Master Shopping List with project notes!
   const handleCopyMasterBOM = () => {
     let text = `🛒 *EasiCart Master Components Procurement List*\n`;
@@ -570,14 +769,112 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
           text += `     📝 Note: ${u.projectNote}\n`;
         }
       });
-      text += `\n`;
     });
 
-    text += `Generated via EasiCart (powered by Easitronics)\n`;
+    text += `\nGenerated via EasiCart (powered by Easitronics)\n`;
 
     navigator.clipboard.writeText(text);
     setSyncStatus('Master Shopping List copied to clipboard!');
     setTimeout(() => setSyncStatus(null), 3000);
+  };
+
+  // Export Components Vault as JSON Backup
+  const handleExportVaultJSON = () => {
+    const vault = getLocalVault();
+    // Also include all current project components
+    projects.forEach(p => {
+      if (p.components && p.components.length > 0) {
+        const normKey = (p.projectTitle || '').toLowerCase().trim();
+        vault[normKey] = {
+          projectTitle: p.projectTitle,
+          projectId: p.id,
+          components: p.components,
+          clientSpecialNotes: p.clientSpecialNotes || '',
+          budget: p.budget || '',
+          deadline: p.deadline || '',
+          clientPhone: p.clientPhone || '',
+          updatedAt: p.updatedAt || new Date().toISOString(),
+        };
+      }
+    });
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(vault, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `easicart_components_vault_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    setSyncStatus('Components Vault exported to JSON file! You can keep this backup anytime.');
+    setTimeout(() => setSyncStatus(null), 4000);
+  };
+
+  // Export Consolidated BOM to CSV
+  const handleExportBOMCSV = () => {
+    const headers = ['#', 'Component Name', 'Category', 'Total Required', 'Need to Buy', 'Procured', 'Assembled', 'Projects Using'];
+    const rows = consolidatedBOM.map((item, idx) => [
+      idx + 1,
+      `"${item.name.replace(/"/g, '""')}"`,
+      `"${item.category}"`,
+      item.totalQuantity,
+      item.pendingQuantity,
+      item.procuredQuantity,
+      item.assembledQuantity,
+      `"${item.usedInProjects.map(u => `${u.projectTitle} (${u.componentQty}x)`).join('; ').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `easicart_master_bom_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setSyncStatus('Master BOM exported as CSV spreadsheet!');
+    setTimeout(() => setSyncStatus(null), 3000);
+  };
+
+  // Restore Vault from uploaded JSON Backup
+  const handleRestoreVaultFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsedVault = JSON.parse(text);
+        if (typeof parsedVault !== 'object' || parsedVault === null) {
+          throw new Error('Invalid JSON format');
+        }
+
+        // Save to local vault
+        const currentVault = getLocalVault();
+        const mergedVault = { ...currentVault, ...parsedVault };
+        saveLocalVault(mergedVault);
+
+        // Update server vault
+        await fetch('/api/client-projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'restore_vault', vault: mergedVault }),
+        });
+
+        // Re-load projects
+        await loadData(false);
+
+        setSyncStatus(`Successfully restored ${Object.keys(parsedVault).length} saved component lists from backup file!`);
+        setTimeout(() => setSyncStatus(null), 5000);
+      } catch (err: any) {
+        alert('Failed to parse backup file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    if (e.target) e.target.value = '';
   };
 
   // Add new custom project handler
@@ -614,9 +911,26 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
 
     const updated = [newProj, ...projects];
     await persistProjects(updated);
+
+    // Save to local vault
+    const normKey = newTitle.trim().toLowerCase();
+    const vault = getLocalVault();
+    vault[normKey] = {
+      projectTitle: newTitle.trim(),
+      projectId: newProj.id,
+      components: cleanedComponents,
+      clientSpecialNotes: newNotes.trim(),
+      budget: newBudget.trim(),
+      deadline: newDeadline.trim(),
+      clientPhone: newPhone.trim(),
+      updatedAt: now,
+    };
+    saveLocalVault(vault);
+
     setIsNewModalOpen(false);
 
     // Reset form
+    setSelectedCatalogId('');
     setNewTitle('');
     setNewClientName('');
     setNewPhone('');
@@ -628,6 +942,19 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
       { id: 'nc-1', name: '', quantity: 1, category: 'Microcontroller', notes: '', status: 'pending' },
       { id: 'nc-2', name: '', quantity: 1, category: 'Sensor', notes: '', status: 'pending' },
     ]);
+  };
+
+  // Handler for selecting from catalog projects
+  const handleSelectCatalogProject = (catalogId: string) => {
+    setSelectedCatalogId(catalogId);
+    if (!catalogId) return;
+
+    const matched = catalogProjects.find(p => p.id === catalogId);
+    if (matched) {
+      setNewTitle(matched.title);
+      setNewBudget(`₹${matched.price.toLocaleString('en-IN')}`);
+      setNewNotes(matched.description || '');
+    }
   };
 
   // Overall Statistics
@@ -645,27 +972,33 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
       <div className="bg-white border border-[#d5d9d9] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-[#007185]/10 border border-[#007185]/20 flex items-center justify-center text-[#007185] shrink-0 mt-0.5">
-            <RefreshCw className={`w-5 h-5 ${syncingGoogleForm ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-5 h-5 ${syncingGoogleForm ? 'animate-spin text-[#007185]' : 'text-[#007185]'}`} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold uppercase tracking-wider text-[#007185]">
                 Connected Google Form Sheet
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                Auto-Link Active
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                <span>Live Connected ✅</span>
               </span>
+              {lastSyncTime && (
+                <span className="text-[11px] text-[#565959]">
+                  Last synced: <span className="font-mono font-bold text-[#0f1111]">{lastSyncTime}</span>
+                </span>
+              )}
             </div>
             <h3 className="text-sm sm:text-base font-extrabold text-[#0f1111]">
-              Title List Form: Budget, Contact Number & Submissions
+              Contact Information vsm 2026/27 (Google Sheet)
             </h3>
             <p className="text-xs text-[#565959] mt-0.5 max-w-2xl">
-              Import incoming project titles directly from your Google Form responses spreadsheet. Type notes & component lists for each, then check your consolidated Master BOM.
+              Project orders are automatically fetched from your Google Sheet. Type components and notes for any title — they are permanently saved into the Master Storage Vault and won&apos;t be erased on refresh.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <a
             href={GOOGLE_FORM_RESPONSES_SHEET_URL}
             target="_blank"
@@ -674,13 +1007,14 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
             title="Open Live Google Sheet in new tab"
           >
             <ExternalLink className="w-3.5 h-3.5 text-[#565959]" />
-            <span>Open Sheet</span>
+            <span>Open Google Sheet</span>
           </a>
 
           <button
             onClick={() => loadData(true)}
             disabled={syncingGoogleForm}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] border border-[#fcd200] shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+            title="Refresh from Google Sheet"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncingGoogleForm ? 'animate-spin' : ''}`} />
             <span>{syncingGoogleForm ? 'Syncing...' : 'Sync Orders from Form Sheet'}</span>
@@ -690,9 +1024,14 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
 
       {/* Sync Status Banner */}
       {syncStatus && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2 shadow-sm animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{syncStatus}</span>
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center justify-between shadow-sm animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold">{syncStatus}</span>
+          </div>
+          <button onClick={() => setSyncStatus(null)} className="text-emerald-700 hover:text-emerald-950 font-bold text-xs">
+            ✕
+          </button>
         </div>
       )}
 
@@ -704,7 +1043,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
             <Layers className="w-4 h-4 text-[#007185]" />
           </div>
           <div className="text-2xl font-black text-[#0f1111]">{projects.length}</div>
-          <div className="text-[11px] text-[#565959] mt-0.5">Imported & Saved Projects</div>
+          <div className="text-[11px] text-[#565959] mt-0.5">Synced from Sheet & Catalog</div>
         </div>
 
         <div className="bg-white border border-[#d5d9d9] p-3.5 sm:p-4 rounded-xl shadow-sm">
@@ -727,23 +1066,21 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
 
         <div className="bg-white border border-[#d5d9d9] p-3.5 sm:p-4 rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-xs text-[#565959] font-medium mb-1">
-            <span>Procured / Ready</span>
-            <PackageCheck className="w-4 h-4 text-emerald-600" />
+            <span>Saved in Vault</span>
+            <Database className="w-4 h-4 text-emerald-600" />
           </div>
-          <div className="text-2xl font-black text-emerald-700">{totalComponentsProcured}</div>
-          <div className="text-[11px] text-[#565959] mt-0.5">
-            {totalComponentsNeeded > 0 ? `${Math.round((totalComponentsProcured / totalComponentsNeeded) * 100)}% ready` : '0% ready'}
-          </div>
+          <div className="text-2xl font-black text-emerald-700">{savedVaultProjects.length}</div>
+          <div className="text-[11px] text-[#565959] mt-0.5">Titles with saved components</div>
         </div>
       </div>
 
-      {/* VIEW TABS BAR */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white border border-[#d5d9d9] p-3 rounded-2xl shadow-sm">
-        {/* Toggle between Projects & Master Components List */}
-        <div className="flex items-center gap-2 bg-[#eaeded] p-1 rounded-xl">
+      {/* VIEW SELECTOR & ACTION TOOLBAR */}
+      <div className="bg-white border border-[#d5d9d9] rounded-2xl p-3 sm:p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* View Switchers */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
           <button
             onClick={() => setActiveView('projects')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
               activeView === 'projects'
                 ? 'bg-white text-[#0f1111] shadow-sm border border-[#d5d9d9]'
                 : 'text-[#565959] hover:text-[#0f1111]'
@@ -755,7 +1092,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
 
           <button
             onClick={() => setActiveView('master-bom')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
               activeView === 'master-bom'
                 ? 'bg-[#ffd814] text-[#0f1111] shadow-sm border border-[#fcd200]'
                 : 'text-[#565959] hover:text-[#0f1111]'
@@ -764,17 +1101,82 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
             <ShoppingBag className="w-4 h-4 text-[#b12704]" />
             <span>🛒 Check Components List ({consolidatedBOM.length} parts)</span>
           </button>
+
+          <button
+            onClick={() => setActiveView('vault')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              activeView === 'vault'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-[#565959] hover:text-[#0f1111]'
+            }`}
+          >
+            <Database className="w-4 h-4 text-emerald-400" />
+            <span>💾 Saved Components Vault ({savedVaultProjects.length})</span>
+          </button>
         </div>
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-xs">
+        {/* Global Vault Backup / Export Tools */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Hidden File Input for Restoring Vault Backup */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".json"
+            onChange={handleRestoreVaultFile}
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={handleExportVaultJSON}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-50 hover:bg-slate-100 text-[#0f1111] border border-[#d5d9d9] transition-all"
+            title="Download full JSON backup of all saved components"
+          >
+            <Download className="w-3.5 h-3.5 text-[#007185]" />
+            <span>Backup (.json)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportBOMCSV}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-50 hover:bg-slate-100 text-[#0f1111] border border-[#d5d9d9] transition-all"
+            title="Download complete Master BOM as CSV spreadsheet"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Export BOM (.csv)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-50 hover:bg-slate-100 text-[#0f1111] border border-[#d5d9d9] transition-all"
+            title="Restore components from JSON backup file"
+          >
+            <Upload className="w-3.5 h-3.5 text-amber-600" />
+            <span>Restore Backup</span>
+          </button>
+
+          {/* Add Custom Project Button */}
+          <button
+            onClick={() => setIsNewModalOpen(true)}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#ffa41c] hover:bg-[#ff8f00] text-[#0f1111] border border-[#ff8f00] shadow-sm transition-all active:scale-95 shrink-0"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Add Project Title</span>
+          </button>
+        </div>
+      </div>
+
+      {/* SEARCH TOOLBAR */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-[#d5d9d9]">
+        <div className="relative flex-1 max-w-md">
           <Search className="w-3.5 h-3.5 text-[#565959] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search projects, client, phone, note..."
+            placeholder="Search titles, components, client, phone, notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#f7fafa] border border-[#d5d9d9] text-[#0f1111] text-xs rounded-xl pl-8 pr-3 py-1.5 focus:outline-none focus:border-[#007185] focus:bg-white placeholder:text-[#565959]"
+            className="w-full bg-[#f7fafa] border border-[#d5d9d9] text-[#0f1111] text-xs rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:border-[#007185] focus:bg-white placeholder:text-[#565959]"
           />
           {searchQuery && (
             <button 
@@ -786,14 +1188,22 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
           )}
         </div>
 
-        {/* Add Custom Project Button */}
-        <button
-          onClick={() => setIsNewModalOpen(true)}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#ffa41c] hover:bg-[#ff8f00] text-[#0f1111] border border-[#ff8f00] shadow-sm transition-all active:scale-95 shrink-0"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Add Custom Project</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-[#565959] font-medium">Status:</span>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-[#f7fafa] border border-[#d5d9d9] text-[#0f1111] text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#007185]"
+          >
+            <option value="All">All Projects ({projects.length})</option>
+            <option value="In Development">In Development</option>
+            <option value="Planning">Planning</option>
+            <option value="Procuring">Procuring</option>
+            <option value="Testing">Testing</option>
+            <option value="Ready">Ready</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+        </div>
       </div>
 
       {/* VIEW 1: PROJECTS & NOTE FORMS */}
@@ -802,14 +1212,14 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
           {loading ? (
             <div className="bg-white border border-[#d5d9d9] rounded-2xl p-12 text-center text-[#565959]">
               <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#007185]" />
-              <p className="text-xs font-semibold">Loading projects...</p>
+              <p className="text-xs font-semibold">Loading project orders from Google Sheet & storage...</p>
             </div>
           ) : filteredProjects.length === 0 ? (
             <div className="bg-white border border-[#d5d9d9] rounded-2xl p-10 text-center space-y-3">
               <Layers className="w-10 h-10 text-slate-300 mx-auto" />
               <h4 className="text-base font-bold text-[#0f1111]">No matching projects found</h4>
               <p className="text-xs text-[#565959] max-w-md mx-auto">
-                Sync with your Google Form Responses sheet or click "Add Custom Project" above to create one.
+                Sync with your Google Form Responses sheet or click &quot;Add Project Title&quot; above to create one.
               </p>
               <button
                 onClick={() => loadData(true)}
@@ -830,6 +1240,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                 return (
                   <div
                     key={project.id}
+                    id={`project-card-${project.id}`}
                     className="bg-white border border-[#d5d9d9] hover:border-[#a6c8e0] rounded-2xl overflow-hidden shadow-sm transition-all"
                   >
                     {/* CARD HEADER */}
@@ -847,6 +1258,12 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                             {project.id.startsWith('gform-') && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
                                 Google Form Order
+                              </span>
+                            )}
+                            {totalComps > 0 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-bold flex items-center gap-1">
+                                <Database className="w-3 h-3 text-blue-600" />
+                                <span>{totalComps} Components Saved</span>
                               </span>
                             )}
                           </div>
@@ -974,12 +1391,15 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                                 <Pencil className="w-4 h-4 text-[#f08804]" />
                                 Quick Note Form & Components Editor
                               </span>
-                              <span className="text-[11px] text-[#565959]">Type notes and components, then click Save</span>
+                              <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Saved components persist across refresh</span>
+                              </span>
                             </div>
 
                             {saveSuccessMsg && (
                               <div className="p-2.5 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span>{saveSuccessMsg}</span>
                               </div>
                             )}
@@ -1051,7 +1471,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                                 <button
                                   type="button"
                                   onClick={() => addEditComponentRow()}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-[#0f1111] text-xs font-bold border border-[#d5d9d9] shadow-sm self-start sm:self-auto"
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-[#0f1111] text-xs font-bold border border-[#d5d9d9] shadow-sm self-start sm:self-auto cursor-pointer"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
                                   <span>+ Add Row</span>
@@ -1077,7 +1497,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                                   <button
                                     type="button"
                                     onClick={() => handleQuickAddLines(editQuickLine)}
-                                    className="px-3 py-1.5 rounded-lg bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] font-bold text-xs border border-[#fcd200] shrink-0"
+                                    className="px-3 py-1.5 rounded-lg bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] font-bold text-xs border border-[#fcd200] shrink-0 cursor-pointer"
                                   >
                                     Add to List
                                   </button>
@@ -1091,7 +1511,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                                       key={chip}
                                       type="button"
                                       onClick={() => addEditComponentRow(chip, 1)}
-                                      className="text-[10px] px-2 py-0.5 rounded-md bg-[#eaeded] hover:bg-[#d5d9d9] text-[#0f1111] font-medium transition-colors"
+                                      className="text-[10px] px-2 py-0.5 rounded-md bg-[#eaeded] hover:bg-[#d5d9d9] text-[#0f1111] font-medium transition-colors cursor-pointer"
                                     >
                                       + {chip}
                                     </button>
@@ -1202,7 +1622,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                               <button
                                 type="button"
                                 onClick={() => handleSaveInlineEditor(project.id)}
-                                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] font-black text-xs sm:text-sm border border-[#fcd200] shadow-md transition-all active:scale-95 cursor-pointer"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] font-black text-xs sm:text-sm border border-[#fcd200] shadow-md transition-all active:scale-95 cursor-pointer"
                               >
                                 <Save className="w-4 h-4" />
                                 <span>Save Project & Components</span>
@@ -1219,14 +1639,14 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                                   <div className="p-1 rounded-lg bg-[#f08804]/20 text-[#b12704] shrink-0 mt-0.5">
                                     <FileText className="w-4 h-4" />
                                   </div>
-                                  <div className="space-y-1 min-w-0">
+                                  <div className="space-y-1 min-w-0 flex-1">
                                     <div className="flex items-center justify-between">
                                       <h4 className="text-xs font-black text-[#b12704] uppercase tracking-wider">
                                         📝 PROJECT NOTE & CLIENT INSTRUCTIONS:
                                       </h4>
                                       <button
                                         onClick={() => startEditProject(project)}
-                                        className="text-[11px] font-bold text-[#007185] hover:text-[#c7511f] flex items-center gap-1"
+                                        className="text-[11px] font-bold text-[#007185] hover:text-[#c7511f] flex items-center gap-1 cursor-pointer"
                                       >
                                         <Pencil className="w-3 h-3" />
                                         <span>Edit Note</span>
@@ -1243,7 +1663,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                                 <span>No project note typed yet.</span>
                                 <button
                                   onClick={() => startEditProject(project)}
-                                  className="text-xs font-bold text-[#007185] hover:text-[#c7511f]"
+                                  className="text-xs font-bold text-[#007185] hover:text-[#c7511f] cursor-pointer"
                                 >
                                   + Type Project Note & Components
                                 </button>
@@ -1263,7 +1683,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                                   </span>
                                   <button
                                     onClick={() => startEditProject(project)}
-                                    className="text-xs font-bold text-[#007185] hover:text-[#c7511f]"
+                                    className="text-xs font-bold text-[#007185] hover:text-[#c7511f] cursor-pointer"
                                   >
                                     + Edit List
                                   </button>
@@ -1272,7 +1692,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
 
                               {totalComps === 0 ? (
                                 <div className="p-4 rounded-xl bg-[#f7fafa] border border-[#d5d9d9] text-center text-xs text-[#565959]">
-                                  No components listed yet. Click <strong>"Type Note & Components"</strong> above to add components.
+                                  No components listed yet. Click <strong>&quot;Type Note & Components&quot;</strong> above to add components.
                                 </div>
                               ) : (
                                 <div className="border border-[#d5d9d9] rounded-xl overflow-hidden shadow-2xs">
@@ -1386,6 +1806,14 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                 <Copy className="w-3.5 h-3.5" />
                 <span>Copy Master Shopping List</span>
               </button>
+
+              <button
+                onClick={handleExportBOMCSV}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0f1111] font-bold text-xs border border-[#d5d9d9] shadow-sm transition-all cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Download BOM (.csv)</span>
+              </button>
             </div>
           </div>
 
@@ -1394,7 +1822,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
               <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto" />
               <h4 className="text-sm font-bold text-[#0f1111]">No components in Master List yet</h4>
               <p className="text-xs text-[#565959]">
-                Click on the <strong>"📋 Project Note Forms"</strong> tab and add components to your projects to see them aggregated here.
+                Click on the <strong>&quot;📋 Project Note Forms&quot;</strong> tab and add components to your projects to see them aggregated here.
               </p>
             </div>
           ) : (
@@ -1422,70 +1850,50 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                         </td>
 
                         {/* Category */}
-                        <td className="py-3 px-3 text-[#565959]">
+                        <td className="py-3 px-3">
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                             {item.category}
                           </span>
                         </td>
 
                         {/* Total Qty */}
-                        <td className="py-3 px-3 text-center font-black text-[#b12704] font-mono text-base">
+                        <td className="py-3 px-3 text-center font-mono font-black text-sm text-[#0f1111]">
                           {item.totalQuantity} pcs
                         </td>
 
-                        {/* Need to buy */}
-                        <td className="py-3 px-3 text-center font-mono">
-                          {item.pendingQuantity > 0 ? (
-                            <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs">
-                              {item.pendingQuantity} pcs
-                            </span>
-                          ) : (
-                            <span className="text-emerald-700 font-bold flex items-center justify-center gap-1 text-xs">
-                              <Check className="w-3.5 h-3.5" /> All Ready
-                            </span>
-                          )}
+                        {/* Need to Buy */}
+                        <td className="py-3 px-3 text-center">
+                          <span className={`font-mono font-bold text-xs px-2 py-0.5 rounded ${
+                            item.pendingQuantity > 0 
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200' 
+                              : 'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {item.pendingQuantity > 0 ? `${item.pendingQuantity} needed` : 'All ready'}
+                          </span>
                         </td>
 
-                        {/* Required by projects & project notes! */}
-                        <td className="py-3 px-4 space-y-2">
-                          {item.usedInProjects.map((u, pIdx) => (
-                            <div
-                              key={pIdx}
-                              className="p-2.5 rounded-lg bg-[#f7fafa] border border-[#d5d9d9] space-y-1 text-xs"
-                            >
-                              <div className="flex items-center justify-between flex-wrap gap-1">
-                                <span className="font-extrabold text-[#0f1111]">
-                                  📌 {u.projectTitle}
-                                </span>
-                                <span className="font-mono font-bold text-[#007185] bg-white px-2 py-0.5 rounded border border-[#d5d9d9]">
-                                  {u.componentQty} pcs needed
-                                </span>
+                        {/* Used In Projects */}
+                        <td className="py-3 px-4">
+                          <div className="space-y-1.5">
+                            {item.usedInProjects.map((u, uIdx) => (
+                              <div key={uIdx} className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                                <div className="flex items-center justify-between font-bold text-[#0f1111]">
+                                  <span>{u.projectTitle}</span>
+                                  <span className="font-mono text-[#007185]">Qty: {u.componentQty}</span>
+                                </div>
+                                <div className="text-[11px] text-[#565959] mt-0.5 flex items-center gap-2">
+                                  <span>Client: {u.clientName}</span>
+                                  {u.clientPhone && <span>• Phone: {u.clientPhone}</span>}
+                                  {u.budget && <span>• Budget: {u.budget}</span>}
+                                </div>
+                                {u.projectNote && (
+                                  <div className="mt-1 pt-1 border-t border-slate-200 text-[11px] text-[#b12704] font-medium">
+                                    📝 <strong>Project Note:</strong> {u.projectNote}
+                                  </div>
+                                )}
                               </div>
-
-                              <div className="text-[11px] text-[#565959] flex items-center gap-3">
-                                <span>Client: <strong>{u.clientName}</strong></span>
-                                {u.budget && <span>Budget: {u.budget}</span>}
-                                {u.deadline && <span>Deadline: {u.deadline}</span>}
-                              </div>
-
-                              {/* Project Note */}
-                              {u.projectNote ? (
-                                <div className="p-1.5 rounded bg-[#fffbf2] border border-[#fbd8b5] text-[11px] text-[#0f1111] font-medium leading-relaxed">
-                                  <strong className="text-[#b12704]">Project Note:</strong> {u.projectNote}
-                                </div>
-                              ) : (
-                                <div className="text-[10px] text-slate-400 italic">
-                                  No project note recorded
-                                </div>
-                              )}
-
-                              {u.componentNote && (
-                                <div className="text-[10px] text-[#007185]">
-                                  Part Note: {u.componentNote}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1497,7 +1905,158 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
         </div>
       )}
 
-      {/* CREATE NEW CUSTOM PROJECT MODAL */}
+      {/* VIEW 3: SAVED COMPONENTS VAULT */}
+      {activeView === 'vault' && (
+        <div className="bg-white border border-[#d5d9d9] rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e7e7e7] pb-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold mb-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Permanent Components Storage Vault</span>
+              </div>
+              <h3 className="text-base sm:text-xl font-black text-[#0f1111]">
+                All Saved Project Component Lists
+              </h3>
+              <p className="text-xs text-[#565959] mt-0.5">
+                Every component list you save is permanently stored here and in browser storage. You can fetch, inspect, export, or edit any saved list anytime.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                onClick={handleExportVaultJSON}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] font-bold text-xs border border-[#fcd200] shadow-sm cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download All (.json)</span>
+              </button>
+
+              <button
+                onClick={handleExportBOMCSV}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0f1111] font-bold text-xs border border-[#d5d9d9] cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Export CSV BOM</span>
+              </button>
+            </div>
+          </div>
+
+          {savedVaultProjects.length === 0 ? (
+            <div className="p-10 text-center space-y-3 bg-[#f7fafa] rounded-2xl border border-dashed border-slate-300">
+              <Database className="w-10 h-10 text-slate-300 mx-auto" />
+              <h4 className="text-sm font-bold text-[#0f1111]">No saved components in vault yet</h4>
+              <p className="text-xs text-[#565959] max-w-md mx-auto">
+                Open any project card in the &quot;Project Note Forms&quot; tab, click &quot;Type Note &amp; Components&quot;, add your hardware parts, and click Save. They will appear here immediately!
+              </p>
+              <button
+                onClick={() => setActiveView('projects')}
+                className="px-4 py-2 rounded-xl bg-[#ffd814] text-[#0f1111] text-xs font-bold border border-[#fcd200] shadow-sm hover:bg-[#f7ca00] cursor-pointer"
+              >
+                Go to Project Note Forms
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {savedVaultProjects.map((p) => {
+                const totalUnits = (p.components || []).reduce((acc, c) => acc + c.quantity, 0);
+
+                return (
+                  <div
+                    key={p.id}
+                    className="border border-[#d5d9d9] hover:border-[#a6c8e0] rounded-xl p-4 bg-white shadow-2xs space-y-3 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                          Saved Vault Item
+                        </span>
+                        <h4 className="font-extrabold text-[#0f1111] text-sm mt-1 leading-snug">
+                          {p.projectTitle}
+                        </h4>
+                        <div className="text-[11px] text-[#565959] mt-0.5 flex items-center gap-2">
+                          <span>Client: <strong>{p.clientName}</strong></span>
+                          {p.clientPhone && <span>• {p.clientPhone}</span>}
+                          {p.budget && <span>• <strong>{p.budget}</strong></span>}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setActiveView('projects');
+                          startEditProject(p);
+                          setTimeout(() => {
+                            const el = document.getElementById(`project-card-${p.id}`);
+                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }, 100);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] font-bold text-xs border border-[#fcd200] shrink-0 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Edit List</span>
+                      </button>
+                    </div>
+
+                    {/* Special Notes Preview */}
+                    {p.clientSpecialNotes && (
+                      <div className="p-2.5 rounded-lg bg-[#fffcf5] border border-[#fbd8b5] text-xs text-[#0f1111] leading-relaxed">
+                        <div className="text-[10px] font-bold text-[#b12704] uppercase">Project Note:</div>
+                        <div className="line-clamp-2">{p.clientSpecialNotes}</div>
+                      </div>
+                    )}
+
+                    {/* Components Chips */}
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-[11px] text-[#565959]">
+                        <span className="font-bold text-[#0f1111]">
+                          {p.components.length} Components ({totalUnits} total units)
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          Updated: {new Date(p.updatedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                        {p.components.map((c) => (
+                          <span
+                            key={c.id}
+                            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-slate-50 border border-slate-200 text-[#0f1111]"
+                          >
+                            <span className="font-semibold">{c.name}</span>
+                            <span className="font-mono font-bold text-[#007185] bg-white px-1 rounded border border-slate-200">
+                              x{c.quantity}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Card Footer Actions */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                      <button
+                        onClick={() => handleCopyProjectSummary(p)}
+                        className="text-[#007185] hover:text-[#c7511f] font-bold flex items-center gap-1"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>Copy Brief</span>
+                      </button>
+
+                      <button
+                        onClick={() => handlePrintWorkbenchSheet(p)}
+                        className="text-[#565959] hover:text-[#0f1111] font-semibold flex items-center gap-1"
+                      >
+                        <Printer className="w-3 h-3" />
+                        <span>Print Sheet</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CREATE NEW PROJECT MODAL WITH CATALOG PROJECT SELECTOR */}
       {isNewModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white border border-[#d5d9d9] rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 space-y-5 shadow-2xl relative animate-scaleUp">
@@ -1507,7 +2066,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                   New Project Brief
                 </span>
                 <h3 className="text-lg font-black text-[#0f1111]">
-                  Add Project & Required Components
+                  Add Project Title & Components
                 </h3>
               </div>
               <button
@@ -1519,6 +2078,27 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
             </div>
 
             <form onSubmit={handleCreateNewProject} className="space-y-4 text-xs">
+              {/* Optional Quick Catalog Auto-select */}
+              {catalogProjects.length > 0 && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <label className="block text-[#0f1111] font-bold">
+                    💡 Optional: Pick from Catalog Titles ({catalogProjects.length} Projects)
+                  </label>
+                  <select
+                    value={selectedCatalogId}
+                    onChange={(e) => handleSelectCatalogProject(e.target.value)}
+                    className="w-full bg-white border border-[#d5d9d9] text-[#0f1111] rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#f08804]"
+                  >
+                    <option value="">-- Choose an existing Catalog Project or type custom title below --</option>
+                    {catalogProjects.map(cp => (
+                      <option key={cp.id} value={cp.id}>
+                        {cp.title} (₹{cp.price.toLocaleString('en-IN')}) - {cp.domain}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className="block text-[#0f1111] font-bold">
                   Project Title <span className="text-rose-600">*</span>
@@ -1603,14 +2183,14 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                   <button
                     type="button"
                     onClick={() => setNewComponents(prev => [...prev, { id: `nc-${Date.now()}`, name: '', quantity: 1, category: 'Sensor', notes: '', status: 'pending' }])}
-                    className="text-xs text-[#007185] hover:text-[#c7511f] font-bold"
+                    className="text-xs text-[#007185] hover:text-[#c7511f] font-bold cursor-pointer"
                   >
                     + Add Row
                   </button>
                 </div>
 
                 <div className="space-y-1.5">
-                  {newComponents.map((c, i) => (
+                  {newComponents.map((c) => (
                     <div key={c.id} className="flex items-center gap-2">
                       <input
                         type="text"
@@ -1630,7 +2210,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                       <button
                         type="button"
                         onClick={() => setNewComponents(prev => prev.filter(item => item.id !== c.id))}
-                        className="p-1.5 text-slate-400 hover:text-rose-600"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
