@@ -40,9 +40,42 @@
     "priority": "Medium",
     "clientRequirements": "",
     "clientSpecialNotes": "Advance Paid: ₹2500",
-    "components": [],
+    "components": [
+      {
+        "id": "c-1",
+        "name": "RFID Reader RC522",
+        "quantity": 1,
+        "category": "RFID / NFC",
+        "status": "procured",
+        "notes": "Item scanned trolley checkout"
+      },
+      {
+        "id": "c-2",
+        "name": "RFID Tags Cards (Pack of 5)",
+        "quantity": 1,
+        "category": "RFID / NFC",
+        "status": "pending",
+        "notes": "Product simulation"
+      },
+      {
+        "id": "c-3",
+        "name": "16x2 I2C LCD Display",
+        "quantity": 1,
+        "category": "Display",
+        "status": "assembled",
+        "notes": "Price and total display"
+      },
+      {
+        "id": "c-4",
+        "name": "ESP32 Wi-Fi IoT Board",
+        "quantity": 1,
+        "category": "Microcontroller",
+        "status": "procured",
+        "notes": "Master controller"
+      }
+    ],
     "createdAt": "2026-09-28T17:13:59.724Z",
-    "updatedAt": "2026-09-29T05:10:22.490Z"
+    "updatedAt": "2026-09-29T05:16:29.358Z"
   },
   {
     "id": "gform-1790615639724-swdz",
@@ -61,7 +94,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2500 | Referral: Thorati Lakshmi Sirisha",
     "components": [],
     "createdAt": "2026-09-28T17:13:59.724Z",
-    "updatedAt": "2026-09-29T05:10:22.490Z"
+    "updatedAt": "2026-09-29T05:16:29.358Z"
   },
   {
     "id": "gform-1790615639724-vg3f",
@@ -80,7 +113,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Siva ram (ece)",
     "components": [],
     "createdAt": "2026-09-28T17:13:59.724Z",
-    "updatedAt": "2026-09-29T05:10:22.490Z"
+    "updatedAt": "2026-09-29T05:16:29.358Z"
   },
   {
     "id": "gform-1790094832127-6q2l",
@@ -99,7 +132,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Hari",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:10:22.490Z"
+    "updatedAt": "2026-09-29T05:16:29.358Z"
   },
   {
     "id": "gform-1790094832127-dqv5",
@@ -118,7 +151,7 @@
     "clientSpecialNotes": "Advance Paid: ₹1000 | Referral: Hari",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:10:22.490Z"
+    "updatedAt": "2026-09-29T05:16:29.358Z"
   },
   {
     "id": "gform-1790094832127-1ies",
@@ -137,7 +170,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Sirisha",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:10:22.490Z"
+    "updatedAt": "2026-09-29T05:16:29.358Z"
   },
   {
     "id": "gform-1790094832127-rj4b",
@@ -156,6 +189,6 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: 9177756819",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:10:22.490Z"
+    "updatedAt": "2026-09-29T05:16:29.358Z"
   }
 ]
