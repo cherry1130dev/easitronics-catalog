@@ -35,10 +35,15 @@ import {
   Database,
   Upload,
   FileSpreadsheet,
-  ShieldCheck
+  ShieldCheck,
+  Cloud,
+  CloudUpload,
+  CloudDownload,
+  Settings
 } from 'lucide-react';
 import { ClientProjectBrief, ProjectComponent, ClientProjectStatus, ClientProjectPriority, Project } from '@/lib/types';
-import { GOOGLE_FORM_RESPONSES_SHEET_URL } from '@/lib/constants';
+import { GOOGLE_FORM_RESPONSES_SHEET_URL, GOOGLE_SHEET_VIEW_URL } from '@/lib/constants';
+import { MASTER_APPS_SCRIPT_CODE } from '@/lib/apps-script-template';
 
 interface ProjectComponentsManagerProps {
   catalogProjects?: Project[];
@@ -117,6 +122,16 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
   const [syncingGoogleForm, setSyncingGoogleForm] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<'projects' | 'master-bom' | 'vault'>('projects');
   
+  // Google Sheets Cloud Sync State (Cross-Device)
+  const [cloudSyncActive, setCloudSyncActive] = useState<boolean>(false);
+  const [cloudVaultCount, setCloudVaultCount] = useState<number>(0);
+  const [fetchingCloud, setFetchingCloud] = useState<boolean>(false);
+  const [pushingCloud, setPushingCloud] = useState<boolean>(false);
+  const [isCloudSetupModalOpen, setIsCloudSetupModalOpen] = useState<boolean>(false);
+  const [cloudWebhookInput, setCloudWebhookInput] = useState<string>('');
+  const [savingWebhook, setSavingWebhook] = useState<boolean>(false);
+  const [copiedAppsScript, setCopiedAppsScript] = useState<boolean>(false);
+
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -187,6 +202,12 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
           serverProjects = data.projects;
           if (data.syncResult) {
             syncDetailMsg = `Auto-synced with Google Sheet! Loaded ${data.projects.length} orders (${data.syncResult.importedCount} new).`;
+          }
+          if (data.cloudSynced) {
+            setCloudSyncActive(true);
+            setCloudVaultCount(data.cloudVaultCount || 0);
+          } else if (data.webhookConfigured) {
+            setCloudSyncActive(true);
           }
           if (data.lastSyncedAt) {
             setLastSyncTime(new Date(data.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -297,6 +318,112 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
     } catch (e) {
       console.error('Error persisting projects:', e);
     }
+  };
+
+  // Fetch components from Google Sheets cloud
+  const handleFetchFromGoogleSheet = async () => {
+    setFetchingCloud(true);
+    setSyncStatus('Fetching latest components from Google Sheets cloud...');
+    try {
+      const res = await fetch('/api/client-projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fetch_cloud_components' }),
+      });
+      const data = await res.json();
+      if (data.success && data.projects) {
+        setProjects(data.projects);
+        localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(data.projects));
+        if (data.vault) {
+          saveLocalVault(data.vault);
+        }
+        setCloudSyncActive(true);
+        setCloudVaultCount(data.cloudCount || Object.keys(data.vault || {}).length);
+        setSyncStatus(data.message || `Loaded components for ${data.cloudCount} projects from Google Sheets!`);
+      } else {
+        setSyncStatus(`Notice: ${data.message || 'No saved components found in Google Sheets Webhook'}`);
+      }
+    } catch (err: any) {
+      setSyncStatus(`Error fetching from Google Sheets: ${err.message}`);
+    } finally {
+      setFetchingCloud(false);
+      setTimeout(() => setSyncStatus(null), 5000);
+    }
+  };
+
+  // Push all local components to Google Sheets cloud
+  const handlePushAllToGoogleSheet = async () => {
+    setPushingCloud(true);
+    setSyncStatus('Pushing all saved components to Google Sheets cloud...');
+    try {
+      const res = await fetch('/api/client-projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'push_all_to_cloud' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCloudSyncActive(true);
+        setSyncStatus(data.message || 'All saved components successfully pushed to Google Sheets!');
+      } else {
+        setSyncStatus(`Notice: ${data.message || 'Failed to push to Google Sheets'}`);
+      }
+    } catch (err: any) {
+      setSyncStatus(`Error pushing to Google Sheets: ${err.message}`);
+    } finally {
+      setPushingCloud(false);
+      setTimeout(() => setSyncStatus(null), 5000);
+    }
+  };
+
+  // Open Cloud Setup Modal and load existing webhook URL
+  const handleOpenCloudSetupModal = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const d = await res.json();
+        if (d.googleSheetWebhookUrl) {
+          setCloudWebhookInput(d.googleSheetWebhookUrl);
+        }
+      }
+    } catch (_) {}
+    setIsCloudSetupModalOpen(true);
+  };
+
+  // Save Webhook URL from modal
+  const handleSaveCloudWebhook = async () => {
+    if (!cloudWebhookInput.trim()) {
+      alert('Please enter a valid Google Apps Script Webhook URL');
+      return;
+    }
+    setSavingWebhook(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl: cloudWebhookInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCloudSyncActive(true);
+        setSyncStatus('Google Sheet Webhook saved! Testing connection...');
+        await handleFetchFromGoogleSheet();
+        setIsCloudSetupModalOpen(false);
+      } else {
+        alert('Failed to save webhook URL: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err: any) {
+      alert('Error saving webhook URL: ' + err.message);
+    } finally {
+      setSavingWebhook(false);
+    }
+  };
+
+  // Copy Master Apps Script code
+  const handleCopyMasterAppsScript = () => {
+    navigator.clipboard.writeText(MASTER_APPS_SCRIPT_CODE);
+    setCopiedAppsScript(true);
+    setTimeout(() => setCopiedAppsScript(false), 2500);
   };
 
   // Toggle Project Expand/Collapse
@@ -477,9 +604,10 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
       saveLocalVault(vault);
     }
 
-    // 4. Send to server API with save_components action for server-side persistence
+    // 4. Send to server API with save_components action for server-side persistence & cloud sync
+    let cloudSynced = false;
     try {
-      await fetch('/api/client-projects', {
+      const res = await fetch('/api/client-projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -494,6 +622,14 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
         }),
       });
 
+      if (res.ok) {
+        const data = await res.json();
+        cloudSynced = Boolean(data.cloudSynced);
+        if (cloudSynced) {
+          setCloudSyncActive(true);
+        }
+      }
+
       // Also sync all to update project JSON
       await fetch('/api/client-projects', {
         method: 'POST',
@@ -504,11 +640,15 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
       console.warn('Server components sync notice (stored in local vault):', err);
     }
 
-    setSaveSuccessMsg(`Saved & Locked! ${validComponents.length} components permanently stored for "${savedTitle}". Will never be erased on refresh.`);
+    if (cloudSynced) {
+      setSaveSuccessMsg(`Saved & Cloud Synced! ${validComponents.length} components permanently locked & accessible across all your devices via Google Sheets! ✨`);
+    } else {
+      setSaveSuccessMsg(`Saved & Locked! ${validComponents.length} components permanently stored for "${savedTitle}". Will never be erased on refresh.`);
+    }
     setTimeout(() => {
       setEditingCardId(null);
       setSaveSuccessMsg(null);
-    }, 1800);
+    }, 2200);
   };
 
   // Quick toggle component status (Need to Buy -> Procured -> Assembled)
@@ -968,57 +1108,113 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
 
   return (
     <div className="space-y-6">
-      {/* GOOGLE FORM SHEET SYNC BAR */}
-      <div className="bg-white border border-[#d5d9d9] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-[#007185]/10 border border-[#007185]/20 flex items-center justify-center text-[#007185] shrink-0 mt-0.5">
-            <RefreshCw className={`w-5 h-5 ${syncingGoogleForm ? 'animate-spin text-[#007185]' : 'text-[#007185]'}`} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#007185]">
-                Connected Google Form Sheet
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span>Live Connected ✅</span>
-              </span>
-              {lastSyncTime && (
-                <span className="text-[11px] text-[#565959]">
-                  Last synced: <span className="font-mono font-bold text-[#0f1111]">{lastSyncTime}</span>
-                </span>
-              )}
+      {/* GOOGLE FORM SHEET & COMPONENTS CLOUD SYNC BAR */}
+      <div className="bg-white border border-[#d5d9d9] rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-[#007185]/10 border border-[#007185]/20 flex items-center justify-center text-[#007185] shrink-0 mt-0.5">
+              <Cloud className={`w-5 h-5 ${fetchingCloud || pushingCloud ? 'animate-pulse text-[#007185]' : 'text-[#007185]'}`} />
             </div>
-            <h3 className="text-sm sm:text-base font-extrabold text-[#0f1111]">
-              Contact Information vsm 2026/27 (Google Sheet)
-            </h3>
-            <p className="text-xs text-[#565959] mt-0.5 max-w-2xl">
-              Project orders are automatically fetched from your Google Sheet. Type components and notes for any title — they are permanently saved into the Master Storage Vault and won&apos;t be erased on refresh.
-            </p>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#007185]">
+                  Google Sheets Cloud Backend
+                </span>
+                
+                {/* Orders Sheet Live Badge */}
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  <span>Orders Sheet Live ✅</span>
+                </span>
+
+                {/* Cloud Components Sync Badge */}
+                {cloudSyncActive ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 font-bold flex items-center gap-1">
+                    <Cloud className="w-3 h-3 text-teal-600" />
+                    <span>Cross-Device Cloud Active ☁️</span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleOpenCloudSetupModal}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 font-bold flex items-center gap-1 hover:bg-amber-100 cursor-pointer"
+                  >
+                    <Settings className="w-3 h-3 text-amber-700" />
+                    <span>Setup Cloud Sync</span>
+                  </button>
+                )}
+
+                {lastSyncTime && (
+                  <span className="text-[11px] text-[#565959]">
+                    Last synced: <span className="font-mono font-bold text-[#0f1111]">{lastSyncTime}</span>
+                  </span>
+                )}
+              </div>
+
+              <h3 className="text-sm sm:text-base font-extrabold text-[#0f1111] mt-0.5">
+                Contact Information vsm 2026/27 &amp; Components Cloud Vault
+              </h3>
+              <p className="text-xs text-[#565959] mt-0.5 max-w-2xl">
+                Hardware components &amp; notes are stored in Google Sheets so you can view, edit, and fetch them from <strong>any phone, laptop, or browser</strong>.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-          <a
-            href={GOOGLE_FORM_RESPONSES_SHEET_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-[#0f1111] border border-[#d5d9d9] transition-all"
-            title="Open Live Google Sheet in new tab"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-[#565959]" />
-            <span>Open Google Sheet</span>
-          </a>
+          {/* Cloud Action Buttons */}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* Fetch from Google Sheet (Pull to this device) */}
+            <button
+              onClick={handleFetchFromGoogleSheet}
+              disabled={fetchingCloud}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+              title="Pull latest saved components from Google Sheets into this device"
+            >
+              <CloudDownload className={`w-3.5 h-3.5 text-teal-700 ${fetchingCloud ? 'animate-bounce' : ''}`} />
+              <span>{fetchingCloud ? 'Fetching...' : 'Fetch Components'}</span>
+            </button>
 
-          <button
-            onClick={() => loadData(true)}
-            disabled={syncingGoogleForm}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] border border-[#fcd200] shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-            title="Refresh from Google Sheet"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncingGoogleForm ? 'animate-spin' : ''}`} />
-            <span>{syncingGoogleForm ? 'Syncing...' : 'Sync Orders from Form Sheet'}</span>
-          </button>
+            {/* Push to Google Sheet (Upload from this device) */}
+            <button
+              onClick={handlePushAllToGoogleSheet}
+              disabled={pushingCloud}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-[#0f1111] border border-[#d5d9d9] transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+              title="Upload all local component lists to Google Sheets"
+            >
+              <CloudUpload className={`w-3.5 h-3.5 text-[#007185] ${pushingCloud ? 'animate-bounce' : ''}`} />
+              <span>{pushingCloud ? 'Pushing...' : 'Push to Cloud'}</span>
+            </button>
+
+            {/* Open Google Sheet */}
+            <a
+              href={GOOGLE_FORM_RESPONSES_SHEET_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-[#0f1111] border border-[#d5d9d9] transition-all"
+              title="Open Live Google Sheet in new tab to view components on any device"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-[#565959]" />
+              <span>View Sheet</span>
+            </a>
+
+            {/* Google Sheets Cloud Setup Modal Opener */}
+            <button
+              onClick={handleOpenCloudSetupModal}
+              className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-[#565959] hover:text-[#0f1111] border border-[#d5d9d9] transition-all cursor-pointer"
+              title="Configure Google Apps Script Webhook"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Sync Form Orders button */}
+            <button
+              onClick={() => loadData(true)}
+              disabled={syncingGoogleForm}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] border border-[#fcd200] shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Refresh project orders from Google Form Responses sheet"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncingGoogleForm ? 'animate-spin' : ''}`} />
+              <span>{syncingGoogleForm ? 'Syncing...' : 'Sync Orders'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1941,6 +2137,66 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
             </div>
           </div>
 
+          {/* Cloud Synchronization Card */}
+          <div className="bg-gradient-to-r from-teal-900/10 via-slate-50 to-amber-500/10 border border-teal-200/80 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-extrabold text-[#0f1111]">
+                    Google Sheets Cloud Storage (Multi-Device Sync)
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 font-bold border border-teal-300">
+                    Tab: &quot;Components&quot; &amp; &quot;Components_Vault&quot;
+                  </span>
+                </div>
+                <p className="text-xs text-[#565959] mt-0.5 max-w-xl">
+                  Components are stored directly in your Google Sheet spreadsheet. You can open and view them on any smartphone or laptop via the Google Sheets app or fetch them live into EasiCart.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                onClick={handleFetchFromGoogleSheet}
+                disabled={fetchingCloud}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-[#0f1111] border border-[#d5d9d9] shadow-2xs transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <CloudDownload className={`w-3.5 h-3.5 text-teal-700 ${fetchingCloud ? 'animate-bounce' : ''}`} />
+                <span>{fetchingCloud ? 'Fetching...' : 'Fetch from Sheet'}</span>
+              </button>
+
+              <button
+                onClick={handlePushAllToGoogleSheet}
+                disabled={pushingCloud}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <CloudUpload className={`w-3.5 h-3.5 ${pushingCloud ? 'animate-bounce' : ''}`} />
+                <span>{pushingCloud ? 'Pushing...' : 'Push All to Sheet'}</span>
+              </button>
+
+              <a
+                href={GOOGLE_FORM_RESPONSES_SHEET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-[#0f1111] border border-[#d5d9d9] transition-all"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-[#565959]" />
+                <span>Open Sheet</span>
+              </a>
+
+              <button
+                onClick={handleOpenCloudSetupModal}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] border border-[#fcd200] transition-all cursor-pointer"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>Setup Guide</span>
+              </button>
+            </div>
+          </div>
+
           {savedVaultProjects.length === 0 ? (
             <div className="p-10 text-center space-y-3 bg-[#f7fafa] rounded-2xl border border-dashed border-slate-300">
               <Database className="w-10 h-10 text-slate-300 mx-auto" />
@@ -2235,6 +2491,151 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* GOOGLE SHEETS CLOUD SETUP MODAL */}
+      {isCloudSetupModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white border border-[#d5d9d9] rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 space-y-5 shadow-2xl relative animate-scaleUp">
+            <div className="flex items-center justify-between border-b border-[#e7e7e7] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-[#0f1111]">
+                    Google Sheets Components Cloud Sync
+                  </h3>
+                  <p className="text-xs text-[#565959]">
+                    Store and view hardware component details on any smartphone, tablet, or PC
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCloudSetupModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Step-by-Step Instructions */}
+            <div className="space-y-4 text-xs">
+              <div className="bg-[#f7fafa] border border-[#d5d9d9] rounded-xl p-4 space-y-2.5">
+                <h4 className="font-bold text-[#0f1111] text-xs uppercase tracking-wide flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#ffd814] text-[#0f1111] flex items-center justify-center font-bold text-[11px]">
+                    1
+                  </span>
+                  <span>Open Your Google Spreadsheet</span>
+                </h4>
+                <p className="text-slate-600 leading-relaxed pl-7">
+                  Open your connected Google Sheet in a new tab.
+                </p>
+                <div className="pl-7">
+                  <a
+                    href={GOOGLE_FORM_RESPONSES_SHEET_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-[#007185] border border-[#d5d9d9] shadow-2xs"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open Google Sheet ({GOOGLE_FORM_RESPONSES_SHEET_URL.substring(0, 45)}...)</span>
+                  </a>
+                </div>
+              </div>
+
+              <div className="bg-[#f7fafa] border border-[#d5d9d9] rounded-xl p-4 space-y-2.5">
+                <h4 className="font-bold text-[#0f1111] text-xs uppercase tracking-wide flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#ffd814] text-[#0f1111] flex items-center justify-center font-bold text-[11px]">
+                    2
+                  </span>
+                  <span>Open Apps Script &amp; Paste Master Code</span>
+                </h4>
+                <p className="text-slate-600 leading-relaxed pl-7">
+                  In Google Sheets menu, click <strong>Extensions &gt; Apps Script</strong>. Delete any old code in <code>Code.gs</code>, and paste the code below:
+                </p>
+                <div className="pl-7 flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleCopyMasterAppsScript}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-[#ffd814] hover:bg-[#f7ca00] text-[#0f1111] border border-[#fcd200] shadow-2xs cursor-pointer active:scale-95"
+                  >
+                    {copiedAppsScript ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Copied to Clipboard! ✅</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Master Google Apps Script</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="text-[11px] text-slate-500">
+                    (Auto-creates &quot;Components&quot; tab &amp; syncs cross-device)
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-[#f7fafa] border border-[#d5d9d9] rounded-xl p-4 space-y-2">
+                <h4 className="font-bold text-[#0f1111] text-xs uppercase tracking-wide flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#ffd814] text-[#0f1111] flex items-center justify-center font-bold text-[11px]">
+                    3
+                  </span>
+                  <span>Deploy as Web App (Access: Anyone)</span>
+                </h4>
+                <p className="text-slate-600 leading-relaxed pl-7">
+                  Click the blue <strong>Deploy &gt; New deployment</strong> button &gt; Select type: <strong>Web app</strong>.<br />
+                  Set <em>&quot;Execute as&quot;</em>: <strong>Me</strong> and <em>&quot;Who has access&quot;</em>: <strong>Anyone</strong> (crucial for mobile &amp; cross-device access).<br />
+                  Click Deploy, grant permissions, and copy the Web app URL.
+                </p>
+              </div>
+
+              <div className="bg-[#f7fafa] border border-[#d5d9d9] rounded-xl p-4 space-y-3">
+                <h4 className="font-bold text-[#0f1111] text-xs uppercase tracking-wide flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#ffd814] text-[#0f1111] flex items-center justify-center font-bold text-[11px]">
+                    4
+                  </span>
+                  <span>Paste Web App URL &amp; Connect</span>
+                </h4>
+                <div className="pl-7 space-y-2">
+                  <input
+                    type="url"
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    value={cloudWebhookInput}
+                    onChange={(e) => setCloudWebhookInput(e.target.value)}
+                    className="w-full bg-white border border-[#d5d9d9] rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#f08804] font-mono text-[#0f1111]"
+                  />
+                  <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                    <span className="text-[11px] text-slate-500">
+                      Currently using: <code className="text-[#007185]">{cloudWebhookInput ? cloudWebhookInput.substring(0, 40) + '...' : 'None configured'}</code>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveCloudWebhook}
+                      disabled={savingWebhook}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className={`w-3.5 h-3.5 ${savingWebhook ? 'animate-spin' : ''}`} />
+                      <span>{savingWebhook ? 'Connecting...' : 'Save & Connect Cloud'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-[#e7e7e7]">
+              <button
+                type="button"
+                onClick={() => setIsCloudSetupModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0f1111] font-bold text-xs border border-[#d5d9d9] cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

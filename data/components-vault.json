@@ -8,7 +8,7 @@
     "deadline": "October",
     "clientPhone": "9666964907",
     "components": [],
-    "updatedAt": "2026-09-28T17:19:54.593Z"
+    "updatedAt": "2026-09-29T02:48:47.292Z"
   },
   "an iot based smart public transport occupancy monitoring with intelligent door and step safety control": {
     "projectTitle": "An iot based smart public transport occupancy monitoring with intelligent door and step safety control",
@@ -19,7 +19,7 @@
     "deadline": "",
     "clientPhone": "7013743767",
     "components": [],
-    "updatedAt": "2026-09-28T17:19:54.593Z"
+    "updatedAt": "2026-09-29T02:48:47.292Z"
   },
   "an iot-based wireless teleoperation framework for 3d-printed 5-dof robotic arms mounted on autonomous rovers": {
     "projectTitle": "An IoT-Based Wireless Teleoperation Framework for 3D-Printed 5-DOF Robotic Arms Mounted on Autonomous Rovers",
@@ -30,7 +30,7 @@
     "deadline": "",
     "clientPhone": "8074662277",
     "components": [],
-    "updatedAt": "2026-09-28T17:19:54.593Z"
+    "updatedAt": "2026-09-29T02:48:47.292Z"
   },
   "smart steth": {
     "projectTitle": "Smart Steth",
@@ -41,7 +41,7 @@
     "deadline": "",
     "clientPhone": "6301554021",
     "components": [],
-    "updatedAt": "2026-09-28T17:19:54.592Z"
+    "updatedAt": "2026-09-29T02:48:47.292Z"
   },
   "ai-based virtual speed control and breaking system": {
     "projectTitle": "AI-Based virtual speed control and breaking system",
@@ -52,7 +52,7 @@
     "deadline": "",
     "clientPhone": "8074743044",
     "components": [],
-    "updatedAt": "2026-09-28T17:19:54.592Z"
+    "updatedAt": "2026-09-29T02:48:47.292Z"
   },
   "iot-based detection of pesticide in organic fruits and vegetables": {
     "projectTitle": "IOT-BASED DETECTION OF PESTICIDE IN ORGANIC FRUITS AND VEGETABLES",
@@ -63,7 +63,7 @@
     "deadline": "October 20",
     "clientPhone": "7207374644",
     "components": [],
-    "updatedAt": "2026-09-28T17:19:54.592Z"
+    "updatedAt": "2026-09-29T02:48:47.292Z"
   },
   "agrinex": {
     "projectTitle": "AGRINEX",
@@ -74,6 +74,26 @@
     "deadline": "We will inform",
     "clientPhone": "9177756819",
     "components": [],
-    "updatedAt": "2026-09-28T17:19:54.592Z"
+    "updatedAt": "2026-09-29T02:48:47.292Z"
+  },
+  "obstacle avoiding robot": {
+    "projectTitle": "Obstacle avoiding robot",
+    "projectId": "cp-1790650082375",
+    "clientSpecialNotes": "",
+    "clientRequirements": "",
+    "budget": "",
+    "deadline": "",
+    "clientPhone": "",
+    "components": [
+      {
+        "id": "c-test-1",
+        "name": "HC-SR04 Ultrasonic Sensor",
+        "quantity": 2,
+        "category": "Sensor",
+        "notes": "Front mounted",
+        "status": "pending"
+      }
+    ],
+    "updatedAt": "2026-09-29T02:48:02.374Z"
   }
 }

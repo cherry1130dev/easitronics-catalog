@@ -1032,3 +1032,170 @@ export async function deleteProject(
   };
 }
 
+/**
+ * Push components for a single project directly to Google Sheets Webhook
+ */
+export async function pushComponentsToGoogleSheet(data: {
+  projectTitle: string;
+  components: any[];
+  notes?: string;
+  clientPhone?: string;
+  clientName?: string;
+  budget?: string;
+  deadline?: string;
+}): Promise<{ success: boolean; message: string }> {
+  const webhookUrl = getGoogleSheetWebhookUrl();
+  if (!webhookUrl) {
+    return { success: false, message: 'Google Sheets Webhook URL not configured' };
+  }
+
+  try {
+    const payload = {
+      action: 'save_components',
+      projectTitle: data.projectTitle,
+      components: data.components || [],
+      notes: data.notes || '',
+      clientPhone: data.clientPhone || '',
+      clientName: data.clientName || '',
+      budget: data.budget || '',
+      deadline: data.deadline || '',
+    };
+
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+    });
+
+    if (res.ok) {
+      return {
+        success: true,
+        message: `Successfully saved ${data.components.length} components for "${data.projectTitle}" to Google Sheets!`,
+      };
+    } else {
+      return { success: false, message: `Google Sheet Webhook returned HTTP ${res.status}` };
+    }
+  } catch (err: any) {
+    console.warn('Google Sheet components sync warning:', err.message);
+    return { success: false, message: err.message || 'Failed to sync components with Google Sheet' };
+  }
+}
+
+/**
+ * Batch push all components in vault to Google Sheets Webhook
+ */
+export async function pushAllComponentsToGoogleSheet(vault: Record<string, any>): Promise<{
+  success: boolean;
+  message: string;
+  savedCount?: number;
+}> {
+  const webhookUrl = getGoogleSheetWebhookUrl();
+  if (!webhookUrl) {
+    return { success: false, message: 'Google Sheets Webhook URL not configured' };
+  }
+
+  try {
+    const payload = {
+      action: 'save_all_components',
+      vault,
+    };
+
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: true,
+        message: data.message || `Successfully synced ${Object.keys(vault).length} project component vaults to Google Sheets!`,
+        savedCount: data.savedCount || Object.keys(vault).length,
+      };
+    } else {
+      return { success: false, message: `Google Sheet Webhook returned HTTP ${res.status}` };
+    }
+  } catch (err: any) {
+    console.warn('Batch push components warning:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+/**
+ * Fetch components for all projects from Google Sheets Webhook (accessible across any device)
+ */
+export async function fetchComponentsFromGoogleSheet(): Promise<{
+  success: boolean;
+  vault?: Record<string, any>;
+  count?: number;
+  message?: string;
+}> {
+  const webhookUrl = getGoogleSheetWebhookUrl();
+  if (!webhookUrl) {
+    return { success: false, message: 'Google Sheets Webhook URL not configured' };
+  }
+
+  try {
+    // 1. Try GET request with action=get_components
+    const url = new URL(webhookUrl);
+    url.searchParams.set('action', 'get_components');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    let res = await fetch(url.toString(), {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Accept: 'application/json, text/plain, */*' },
+      redirect: 'follow',
+      cache: 'no-store',
+    });
+    clearTimeout(timeoutId);
+
+    // Fallback to POST if GET fails or returns non-JSON
+    let data: any = null;
+    if (res.ok) {
+      try {
+        data = await res.json();
+      } catch (_) {}
+    }
+
+    if (!data || !data.vault) {
+      const postController = new AbortController();
+      const pTimeout = setTimeout(() => postController.abort(), 12000);
+      res = await fetch(webhookUrl, {
+        method: 'POST',
+        signal: postController.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_components' }),
+        redirect: 'follow',
+        cache: 'no-store',
+      });
+      clearTimeout(pTimeout);
+      if (res.ok) {
+        data = await res.json().catch(() => null);
+      }
+    }
+
+    if (data && data.vault && typeof data.vault === 'object') {
+      return {
+        success: true,
+        vault: data.vault,
+        count: Object.keys(data.vault).length,
+        message: `Loaded ${Object.keys(data.vault).length} component entries from Google Sheets!`,
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Google Sheet Webhook returned no components vault or returned catalog format',
+    };
+  } catch (err: any) {
+    console.warn('Fetch components from Google Sheet warning:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+

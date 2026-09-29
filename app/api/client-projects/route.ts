@@ -4,6 +4,12 @@ import path from 'path';
 import * as XLSX from 'xlsx';
 import { ClientProjectBrief, ProjectComponent } from '@/lib/types';
 import { GOOGLE_FORM_RESPONSES_CSV_URL } from '@/lib/constants';
+import {
+  fetchComponentsFromGoogleSheet,
+  pushComponentsToGoogleSheet,
+  pushAllComponentsToGoogleSheet,
+  getGoogleSheetWebhookUrl,
+} from '@/lib/sheets';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const CLIENT_PROJECTS_FILE = path.join(DATA_DIR, 'client-projects.json');
@@ -295,17 +301,58 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const forceImport = searchParams.get('importGoogleForm') === 'true';
     const noSync = searchParams.get('noSync') === 'true';
+    const syncCloud = searchParams.get('syncCloud') !== 'false';
 
     let projects = ensureDataFile();
     let vault = ensureVaultFile();
 
-    // 1. Always restore any components from vault into project objects
+    // 1. Fetch latest cloud components from Google Sheets (enables cross-device view)
+    let cloudSynced = false;
+    let cloudVaultCount = 0;
+    let cloudSyncMessage = '';
+
+    if (syncCloud && getGoogleSheetWebhookUrl()) {
+      try {
+        const cloudData = await fetchComponentsFromGoogleSheet();
+        if (cloudData.success && cloudData.vault && Object.keys(cloudData.vault).length > 0) {
+          Object.entries(cloudData.vault).forEach(([k, cloudEntry]: [string, any]) => {
+            const key = normalizeKey(k);
+            if (!key) return;
+            const existingEntry = vault[key];
+            const cloudHasComps = cloudEntry.components && cloudEntry.components.length > 0;
+            const existingHasComps = existingEntry?.components && existingEntry.components.length > 0;
+
+            // Merge if new entry, or if cloud has components, or if existing had none
+            if (!existingEntry || cloudHasComps || !existingHasComps) {
+              vault[key] = {
+                projectTitle: cloudEntry.projectTitle || existingEntry?.projectTitle || k,
+                projectId: existingEntry?.projectId,
+                clientSpecialNotes: cloudEntry.clientSpecialNotes || existingEntry?.clientSpecialNotes || '',
+                budget: cloudEntry.budget || existingEntry?.budget || '',
+                deadline: cloudEntry.deadline || existingEntry?.deadline || '',
+                clientPhone: cloudEntry.clientPhone || existingEntry?.clientPhone || '',
+                components: cloudHasComps ? cloudEntry.components : (existingEntry?.components || []),
+                updatedAt: cloudEntry.updatedAt || new Date().toISOString(),
+              };
+            }
+          });
+          saveVaultToFile(vault);
+          cloudSynced = true;
+          cloudVaultCount = Object.keys(cloudData.vault).length;
+          cloudSyncMessage = cloudData.message || `Loaded ${cloudVaultCount} entries from Google Sheets`;
+        }
+      } catch (cloudErr: any) {
+        console.warn('Google Sheets cloud components sync notice:', cloudErr.message);
+      }
+    }
+
+    // 2. Always restore any components from vault into project objects
     projects = restoreComponentsFromVault(projects, vault);
 
     let syncResult = null;
     let syncError = null;
 
-    // 2. Automatically sync with Google Form Responses spreadsheet
+    // 3. Automatically sync with Google Form Responses spreadsheet
     if (!noSync || forceImport) {
       try {
         const result = await importGoogleFormProjects(projects, vault);
@@ -327,6 +374,10 @@ export async function GET(request: Request) {
       projects,
       count: projects.length,
       vaultCount: Object.keys(vault).length,
+      cloudSynced,
+      cloudVaultCount,
+      cloudSyncMessage,
+      webhookConfigured: Boolean(getGoogleSheetWebhookUrl()),
       syncResult,
       syncError,
       lastSyncedAt: new Date().toISOString(),
@@ -443,10 +494,34 @@ export async function POST(request: Request) {
       }
 
       saveProjectsToFile(projects);
+
+      // 3. Immediately push to Google Sheets Webhook so any device can view/fetch
+      let cloudSynced = false;
+      let cloudMessage = '';
+      if (getGoogleSheetWebhookUrl()) {
+        try {
+          const pushRes = await pushComponentsToGoogleSheet({
+            projectTitle: projectTitle || 'Project',
+            components: validComps,
+            notes: notes !== undefined ? String(notes).trim() : '',
+            budget: budget !== undefined ? String(budget).trim() : '',
+            deadline: deadline !== undefined ? String(deadline).trim() : '',
+            clientPhone: clientPhone !== undefined ? String(clientPhone).trim() : '',
+          });
+          cloudSynced = pushRes.success;
+          cloudMessage = pushRes.message;
+        } catch (pushErr: any) {
+          console.warn('Google Sheets cloud push notice:', pushErr.message);
+          cloudMessage = pushErr.message;
+        }
+      }
+
       return NextResponse.json({
         success: true,
-        message: `Saved ${validComps.length} components for "${projectTitle}" in both projects list and persistent vault!`,
+        message: `Saved ${validComps.length} components for "${projectTitle}"! ${cloudSynced ? '✨ Synced live to Google Sheets for all devices!' : ''}`,
         componentsCount: validComps.length,
+        cloudSynced,
+        cloudMessage,
         projects,
         count: projects.length,
       });
@@ -525,6 +600,70 @@ export async function POST(request: Request) {
       saveVaultToFile(vault);
       saveProjectsToFile(projects);
       return NextResponse.json({ success: true, count: Object.keys(vault).length, projects });
+    }
+
+    // 9. Fetch cloud components from Google Sheets Webhook on demand
+    if (action === 'fetch_cloud_components') {
+      try {
+        const cloudData = await fetchComponentsFromGoogleSheet();
+        if (cloudData.success && cloudData.vault) {
+          Object.entries(cloudData.vault).forEach(([k, cloudEntry]: [string, any]) => {
+            const key = normalizeKey(k);
+            if (!key) return;
+            const existingEntry = vault[key];
+            const cloudHasComps = cloudEntry.components && cloudEntry.components.length > 0;
+            const existingHasComps = existingEntry?.components && existingEntry.components.length > 0;
+
+            if (!existingEntry || cloudHasComps || !existingHasComps) {
+              vault[key] = {
+                projectTitle: cloudEntry.projectTitle || existingEntry?.projectTitle || k,
+                projectId: existingEntry?.projectId,
+                clientSpecialNotes: cloudEntry.clientSpecialNotes || existingEntry?.clientSpecialNotes || '',
+                budget: cloudEntry.budget || existingEntry?.budget || '',
+                deadline: cloudEntry.deadline || existingEntry?.deadline || '',
+                clientPhone: cloudEntry.clientPhone || existingEntry?.clientPhone || '',
+                components: cloudHasComps ? cloudEntry.components : (existingEntry?.components || []),
+                updatedAt: cloudEntry.updatedAt || new Date().toISOString(),
+              };
+            }
+          });
+          saveVaultToFile(vault);
+          projects = restoreComponentsFromVault(projects, vault);
+          saveProjectsToFile(projects);
+
+          return NextResponse.json({
+            success: true,
+            message: `Successfully loaded ${Object.keys(cloudData.vault).length} component vaults from Google Sheets!`,
+            vaultCount: Object.keys(vault).length,
+            cloudCount: Object.keys(cloudData.vault).length,
+            projects,
+            vault,
+          });
+        } else {
+          return NextResponse.json({
+            success: false,
+            message: cloudData.message || 'No components found in Google Sheets Webhook',
+            projects,
+            vault,
+          });
+        }
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
+    // 10. Push all components to Google Sheets Webhook
+    if (action === 'push_all_to_cloud') {
+      try {
+        const pushRes = await pushAllComponentsToGoogleSheet(vault);
+        return NextResponse.json({
+          success: pushRes.success,
+          message: pushRes.message,
+          savedCount: pushRes.savedCount || Object.keys(vault).length,
+        });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ error: 'Invalid action or missing parameters' }, { status: 400 });
