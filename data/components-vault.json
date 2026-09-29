@@ -9,39 +9,15 @@
     "clientPhone": "9666964907",
     "components": [
       {
-        "id": "c-1",
-        "name": "RFID Reader RC522",
-        "quantity": 1,
-        "category": "RFID / NFC",
-        "status": "procured",
-        "notes": "Item scanned trolley checkout"
-      },
-      {
-        "id": "c-2",
-        "name": "RFID Tags Cards (Pack of 5)",
-        "quantity": 1,
-        "category": "RFID / NFC",
-        "status": "pending",
-        "notes": "Product simulation"
-      },
-      {
-        "id": "c-3",
-        "name": "16x2 I2C LCD Display",
-        "quantity": 1,
-        "category": "Display",
-        "status": "assembled",
-        "notes": "Price and total display"
-      },
-      {
-        "id": "c-4",
-        "name": "ESP32 Wi-Fi IoT Board",
+        "id": "c-1790659810058-l1m9",
+        "name": "esp32 S3",
         "quantity": 1,
         "category": "Microcontroller",
-        "status": "procured",
-        "notes": "Master controller"
+        "notes": "",
+        "status": "pending"
       }
     ],
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   "an iot based smart public transport occupancy monitoring with intelligent door and step safety control": {
     "projectTitle": "An iot based smart public transport occupancy monitoring with intelligent door and step safety control",
@@ -52,7 +28,7 @@
     "deadline": "",
     "clientPhone": "7013743767",
     "components": [],
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   "an iot-based wireless teleoperation framework for 3d-printed 5-dof robotic arms mounted on autonomous rovers": {
     "projectTitle": "An IoT-Based Wireless Teleoperation Framework for 3D-Printed 5-DOF Robotic Arms Mounted on Autonomous Rovers",
@@ -63,18 +39,16 @@
     "deadline": "",
     "clientPhone": "8074662277",
     "components": [],
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   "smart steth": {
     "projectTitle": "Smart Steth",
-    "projectId": "gform-1790094832127-6q2l",
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Hari",
-    "clientRequirements": "",
     "budget": "₹10,000",
     "deadline": "",
     "clientPhone": "6301554021",
     "components": [],
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:40.088Z"
   },
   "ai-based virtual speed control and breaking system": {
     "projectTitle": "AI-Based virtual speed control and breaking system",
@@ -85,7 +59,7 @@
     "deadline": "",
     "clientPhone": "8074743044",
     "components": [],
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   "iot-based detection of pesticide in organic fruits and vegetables": {
     "projectTitle": "IOT-BASED DETECTION OF PESTICIDE IN ORGANIC FRUITS AND VEGETABLES",
@@ -93,10 +67,10 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Sirisha",
     "clientRequirements": "",
     "budget": "₹8,500",
-    "deadline": "October 20",
+    "deadline": "Tue Oct 20 2026 00:00:00 GMT+0530 (India Standard Time)",
     "clientPhone": "7207374644",
     "components": [],
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   "agrinex": {
     "projectTitle": "AGRINEX",
@@ -107,26 +81,6 @@
     "deadline": "We will inform",
     "clientPhone": "9177756819",
     "components": [],
-    "updatedAt": "2026-09-29T05:16:29.358Z"
-  },
-  "obstacle avoiding robot": {
-    "projectTitle": "Obstacle avoiding robot",
-    "projectId": "cp-1790650082375",
-    "clientSpecialNotes": "",
-    "clientRequirements": "",
-    "budget": "",
-    "deadline": "",
-    "clientPhone": "",
-    "components": [
-      {
-        "id": "c-test-1",
-        "name": "HC-SR04 Ultrasonic Sensor",
-        "quantity": 2,
-        "category": "Sensor",
-        "notes": "Front mounted",
-        "status": "pending"
-      }
-    ],
-    "updatedAt": "2026-09-29T02:48:02.374Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   }
 }

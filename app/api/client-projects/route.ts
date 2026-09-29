@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
 import { ClientProjectBrief, ProjectComponent } from '@/lib/types';
-import { GOOGLE_FORM_RESPONSES_CSV_URL } from '@/lib/constants';
+import { GOOGLE_FORM_RESPONSES_CSV_URL, GOOGLE_FORM_RESPONSES_FALLBACK_CSV_URL } from '@/lib/constants';
 import {
   fetchComponentsFromGoogleSheet,
   pushComponentsToGoogleSheet,
@@ -100,17 +100,18 @@ function restoreComponentsFromVault(projects: ClientProjectBrief[], vault: Compo
     const vaultEntry = vault[key];
     if (!vaultEntry) return p;
 
-    const hasComps = p.components && p.components.length > 0;
-    const vaultHasComps = vaultEntry.components && vaultEntry.components.length > 0;
+    // Vault entry represents cloud / saved storage truth!
+    const vaultHasComps = Array.isArray(vaultEntry.components) && vaultEntry.components.length > 0;
+    const comps = vaultHasComps ? vaultEntry.components : (p.components || []);
 
     return {
       ...p,
-      // If project has no components but vault does, restore them
-      components: hasComps ? p.components : (vaultHasComps ? vaultEntry.components : []),
-      clientSpecialNotes: p.clientSpecialNotes || vaultEntry.clientSpecialNotes || '',
-      budget: p.budget || vaultEntry.budget || '',
-      deadline: p.deadline || vaultEntry.deadline || '',
-      clientPhone: p.clientPhone || vaultEntry.clientPhone || '',
+      components: comps,
+      clientSpecialNotes: vaultEntry.clientSpecialNotes || p.clientSpecialNotes || '',
+      budget: vaultEntry.budget || p.budget || '',
+      deadline: vaultEntry.deadline || p.deadline || '',
+      clientPhone: vaultEntry.clientPhone || p.clientPhone || '',
+      updatedAt: vaultEntry.updatedAt || p.updatedAt,
     };
   });
 }
@@ -152,6 +153,7 @@ async function importGoogleFormProjects(existingProjects: ClientProjectBrief[], 
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   let csvText = '';
+  // Try targeted sheet tab (Contact Information vsm 2026/27) first
   try {
     const res = await fetch(GOOGLE_FORM_RESPONSES_CSV_URL, {
       cache: 'no-store',
@@ -162,20 +164,39 @@ async function importGoogleFormProjects(existingProjects: ClientProjectBrief[], 
       },
     });
     clearTimeout(timeoutId);
-    if (!res.ok) {
-      throw new Error(`Google Form Sheet returned HTTP status ${res.status}: ${res.statusText}`);
+    if (res.ok) {
+      csvText = await res.text();
     }
-    csvText = await res.text();
   } catch (fetchErr: any) {
     clearTimeout(timeoutId);
-    throw new Error(`Failed to fetch Google Form sheet CSV: ${fetchErr?.message || fetchErr}`);
+  }
+
+  // Fallback to standard export if GViz export didn't return rows
+  if (!csvText || !csvText.toLowerCase().includes('title')) {
+    try {
+      const fbRes = await fetch(GOOGLE_FORM_RESPONSES_FALLBACK_CSV_URL, {
+        cache: 'no-store',
+        headers: {
+          'Accept': 'text/csv,text/plain,*/*',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
+      if (fbRes.ok) {
+        csvText = await fbRes.text();
+      }
+    } catch (_) {}
+  }
+
+  if (!csvText || !csvText.toLowerCase().includes('title')) {
+    throw new Error('Failed to retrieve spreadsheet data from Contact Information vsm 2026/27 sheet');
   }
 
   const wb = XLSX.read(csvText, { type: 'string' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const rows: any[] = XLSX.utils.sheet_to_json(sheet);
 
-  let updatedProjects = [...existingProjects];
+  // Filter out any test projects
+  let updatedProjects = existingProjects.filter(p => !p.projectTitle.toLowerCase().includes('obstacle avoiding robot'));
   let importedCount = 0;
   let updatedCount = 0;
 
@@ -240,14 +261,15 @@ async function importGoogleFormProjects(existingProjects: ClientProjectBrief[], 
       // Existing project: Preserve existing components & notes, update blank fields
       const curr = updatedProjects[existingIdx];
       
-      // CRITICAL: Preserve components! If curr has components, keep them. Otherwise restore from vault!
-      const preservedComponents = (curr.components && curr.components.length > 0)
-        ? curr.components
-        : (vaultEntry?.components && vaultEntry.components.length > 0 ? vaultEntry.components : []);
+      // CRITICAL: Vault components (from Google Sheets Cloud) ALWAYS take priority over stale disk data!
+      const vaultHasComps = Array.isArray(vaultEntry?.components) && vaultEntry.components.length > 0;
+      const preservedComponents = vaultHasComps
+        ? vaultEntry.components
+        : (curr.components && curr.components.length > 0 ? curr.components : []);
 
-      const mergedNotes = curr.clientSpecialNotes 
-        ? curr.clientSpecialNotes 
-        : (vaultEntry?.clientSpecialNotes || (specialNotesParts.length > 0 ? specialNotesParts.join(' | ') : ''));
+      const mergedNotes = vaultEntry?.clientSpecialNotes
+        ? vaultEntry.clientSpecialNotes
+        : (curr.clientSpecialNotes || (specialNotesParts.length > 0 ? specialNotesParts.join(' | ') : ''));
 
       updatedProjects[existingIdx] = {
         ...curr,
@@ -319,22 +341,18 @@ export async function GET(request: Request) {
             const key = normalizeKey(k);
             if (!key) return;
             const existingEntry = vault[key];
-            const cloudHasComps = cloudEntry.components && cloudEntry.components.length > 0;
-            const existingHasComps = existingEntry?.components && existingEntry.components.length > 0;
+            const cloudComps = Array.isArray(cloudEntry.components) ? cloudEntry.components : [];
 
-            // Merge if new entry, or if cloud has components, or if existing had none
-            if (!existingEntry || cloudHasComps || !existingHasComps) {
-              vault[key] = {
-                projectTitle: cloudEntry.projectTitle || existingEntry?.projectTitle || k,
-                projectId: existingEntry?.projectId,
-                clientSpecialNotes: cloudEntry.clientSpecialNotes || existingEntry?.clientSpecialNotes || '',
-                budget: cloudEntry.budget || existingEntry?.budget || '',
-                deadline: cloudEntry.deadline || existingEntry?.deadline || '',
-                clientPhone: cloudEntry.clientPhone || existingEntry?.clientPhone || '',
-                components: cloudHasComps ? cloudEntry.components : (existingEntry?.components || []),
-                updatedAt: cloudEntry.updatedAt || new Date().toISOString(),
-              };
-            }
+            vault[key] = {
+              projectTitle: cloudEntry.projectTitle || existingEntry?.projectTitle || k,
+              projectId: existingEntry?.projectId,
+              clientSpecialNotes: cloudEntry.clientSpecialNotes || existingEntry?.clientSpecialNotes || '',
+              budget: cloudEntry.budget || existingEntry?.budget || '',
+              deadline: cloudEntry.deadline || existingEntry?.deadline || '',
+              clientPhone: cloudEntry.clientPhone || existingEntry?.clientPhone || '',
+              components: cloudComps.length > 0 ? cloudComps : (existingEntry?.components || []),
+              updatedAt: cloudEntry.updatedAt || new Date().toISOString(),
+            };
           });
           saveVaultToFile(vault);
           cloudSynced = true;
@@ -352,7 +370,7 @@ export async function GET(request: Request) {
     let syncResult = null;
     let syncError = null;
 
-    // 3. Automatically sync with Google Form Responses spreadsheet
+    // 3. Automatically sync with Google Form Responses spreadsheet (Contact Information vsm 2026/27)
     if (!noSync || forceImport) {
       try {
         const result = await importGoogleFormProjects(projects, vault);
@@ -368,6 +386,12 @@ export async function GET(request: Request) {
         syncError = err.message;
       }
     }
+
+    // Filter out any test projects
+    projects = projects.filter(p => !p.projectTitle.toLowerCase().includes('obstacle avoiding robot'));
+
+    // Re-apply vault to guarantee fresh cloud components are on every project
+    projects = restoreComponentsFromVault(projects, vault);
 
     return NextResponse.json({
       success: true,

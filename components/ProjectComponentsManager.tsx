@@ -215,54 +215,27 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
         }
       }
 
-      // Base projects to work from
-      const baseList = serverProjects.length > 0 ? serverProjects : localProjects;
+      // Server projects are live and cloud-synced with Google Sheets
+      const cleanServerProjects = serverProjects.filter(p => 
+        p.projectTitle && !p.projectTitle.toLowerCase().includes('obstacle avoiding robot')
+      );
 
-      // Merge: For every project, guarantee that if local vault or local storage had components, they are PRESERVED!
-      const mergedProjects: ClientProjectBrief[] = baseList.map((p) => {
-        const normKey = (p.projectTitle || '').toLowerCase().trim();
-        const vaultEntry = localVault[normKey];
-        const localMatch = localProjects.find(lp => (lp.projectTitle || '').toLowerCase().trim() === normKey);
+      let finalProjects: ClientProjectBrief[] = [];
+      if (cleanServerProjects.length > 0) {
+        finalProjects = cleanServerProjects;
+      } else {
+        finalProjects = localProjects.filter(p => 
+          p.projectTitle && !p.projectTitle.toLowerCase().includes('obstacle avoiding robot')
+        );
+      }
 
-        // Keep components if present, otherwise restore from vault or local
-        let comps = (p.components && p.components.length > 0) ? p.components : [];
-        if (comps.length === 0 && vaultEntry?.components && vaultEntry.components.length > 0) {
-          comps = vaultEntry.components;
-        }
-        if (comps.length === 0 && localMatch?.components && localMatch.components.length > 0) {
-          comps = localMatch.components;
-        }
-
-        // Keep notes if present, otherwise restore
-        let notes = p.clientSpecialNotes || '';
-        if (!notes && vaultEntry?.clientSpecialNotes) {
-          notes = vaultEntry.clientSpecialNotes;
-        }
-        if (!notes && localMatch?.clientSpecialNotes) {
-          notes = localMatch.clientSpecialNotes;
-        }
-
-        return {
-          ...p,
-          components: comps,
-          clientSpecialNotes: notes,
-        };
-      });
-
-      // Preserve any local custom projects that are not on the server
-      localProjects.forEach((lp) => {
-        const lpKey = (lp.projectTitle || '').toLowerCase().trim();
-        const exists = mergedProjects.some(mp => (mp.projectTitle || '').toLowerCase().trim() === lpKey);
-        if (!exists && lp.projectTitle) {
-          mergedProjects.push(lp);
-        }
-      });
-
-      setProjects(mergedProjects);
-      localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(mergedProjects));
+      setProjects(finalProjects);
+      try {
+        localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(finalProjects));
+      } catch (_) {}
 
       // Refresh local vault with any active components
-      mergedProjects.forEach((p) => {
+      finalProjects.forEach((p) => {
         const normKey = (p.projectTitle || '').toLowerCase().trim();
         if (normKey && ((p.components && p.components.length > 0) || p.clientSpecialNotes)) {
           localVault[normKey] = {
@@ -280,7 +253,7 @@ export default function ProjectComponentsManager({ catalogProjects = [] }: Proje
       saveLocalVault(localVault);
 
       if (forceGoogleFormSync) {
-        setSyncStatus(syncDetailMsg || `Successfully synced! Loaded ${mergedProjects.length} project orders from Google Form sheet.`);
+        setSyncStatus(syncDetailMsg || `Successfully synced! Loaded ${finalProjects.length} project orders from Google Form sheet.`);
         setTimeout(() => setSyncStatus(null), 5000);
       }
     } catch (err) {

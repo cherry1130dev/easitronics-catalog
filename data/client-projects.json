@@ -1,31 +1,5 @@
 [
   {
-    "id": "cp-1790650082375",
-    "projectTitle": "Obstacle avoiding robot",
-    "clientName": "Client",
-    "clientPhone": "",
-    "budget": "",
-    "deadline": "",
-    "domain": "IoT",
-    "branch": "ECE",
-    "status": "In Development",
-    "priority": "Medium",
-    "clientRequirements": "",
-    "clientSpecialNotes": "",
-    "components": [
-      {
-        "id": "c-test-1",
-        "name": "HC-SR04 Ultrasonic Sensor",
-        "quantity": 2,
-        "category": "Sensor",
-        "notes": "Front mounted",
-        "status": "pending"
-      }
-    ],
-    "createdAt": "2026-09-29T02:48:02.374Z",
-    "updatedAt": "2026-09-29T02:48:02.374Z"
-  },
-  {
     "id": "gform-1790615639724-38dp",
     "projectTitle": "Smart automatic billing trolley",
     "clientName": "GANJA SYAMALA",
@@ -42,40 +16,16 @@
     "clientSpecialNotes": "Advance Paid: ₹2500",
     "components": [
       {
-        "id": "c-1",
-        "name": "RFID Reader RC522",
-        "quantity": 1,
-        "category": "RFID / NFC",
-        "status": "procured",
-        "notes": "Item scanned trolley checkout"
-      },
-      {
-        "id": "c-2",
-        "name": "RFID Tags Cards (Pack of 5)",
-        "quantity": 1,
-        "category": "RFID / NFC",
-        "status": "pending",
-        "notes": "Product simulation"
-      },
-      {
-        "id": "c-3",
-        "name": "16x2 I2C LCD Display",
-        "quantity": 1,
-        "category": "Display",
-        "status": "assembled",
-        "notes": "Price and total display"
-      },
-      {
-        "id": "c-4",
-        "name": "ESP32 Wi-Fi IoT Board",
+        "id": "c-1790659810058-l1m9",
+        "name": "esp32 S3",
         "quantity": 1,
         "category": "Microcontroller",
-        "status": "procured",
-        "notes": "Master controller"
+        "notes": "",
+        "status": "pending"
       }
     ],
     "createdAt": "2026-09-28T17:13:59.724Z",
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   {
     "id": "gform-1790615639724-swdz",
@@ -94,7 +44,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2500 | Referral: Thorati Lakshmi Sirisha",
     "components": [],
     "createdAt": "2026-09-28T17:13:59.724Z",
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   {
     "id": "gform-1790615639724-vg3f",
@@ -113,7 +63,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Siva ram (ece)",
     "components": [],
     "createdAt": "2026-09-28T17:13:59.724Z",
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   {
     "id": "gform-1790094832127-6q2l",
@@ -132,7 +82,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Hari",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:40.088Z"
   },
   {
     "id": "gform-1790094832127-dqv5",
@@ -151,7 +101,7 @@
     "clientSpecialNotes": "Advance Paid: ₹1000 | Referral: Hari",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   {
     "id": "gform-1790094832127-1ies",
@@ -161,7 +111,7 @@
     "clientEmail": "",
     "budget": "₹8,500",
     "collegeOrOrg": "Vsm college of engineering at Ramchandra puram",
-    "deadline": "October 20",
+    "deadline": "Tue Oct 20 2026 00:00:00 GMT+0530 (India Standard Time)",
     "domain": "IoT",
     "branch": "ECE",
     "status": "In Development",
@@ -170,7 +120,7 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: Sirisha",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   },
   {
     "id": "gform-1790094832127-rj4b",
@@ -189,6 +139,6 @@
     "clientSpecialNotes": "Advance Paid: ₹2000 | Referral: 9177756819",
     "components": [],
     "createdAt": "2026-09-22T16:33:52.127Z",
-    "updatedAt": "2026-09-29T05:16:29.358Z"
+    "updatedAt": "2026-09-29T05:58:28.447Z"
   }
 ]

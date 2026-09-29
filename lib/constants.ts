@@ -8,6 +8,10 @@ export const GOOGLE_FORM_RESPONSES_SHEET_URL =
   'https://docs.google.com/spreadsheets/d/1N-Y7BH0Cf3rgC3LEy2tYlRBHm46nLB3RcABcgrt3YlQ/edit?usp=sharing';
 
 export const GOOGLE_FORM_RESPONSES_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/1N-Y7BH0Cf3rgC3LEy2tYlRBHm46nLB3RcABcgrt3YlQ/gviz/tq?tqx=out:csv&sheet=' +
+  encodeURIComponent('Contact Information vsm 2026/27');
+
+export const GOOGLE_FORM_RESPONSES_FALLBACK_CSV_URL =
   'https://docs.google.com/spreadsheets/d/1N-Y7BH0Cf3rgC3LEy2tYlRBHm46nLB3RcABcgrt3YlQ/export?format=csv';
 
 export const EASITRONICS = {
